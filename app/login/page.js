@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import LangSwitch from '@/components/LangSwitch';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { sb } from '@/lib/supabase';
 
@@ -54,6 +55,7 @@ export default function LoginPage() {
           <input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         <button className="btn" type="submit" disabled={busy}>{busy ? 'Logging in...' : 'Log in'}</button>
+        <p className="login-alt">New to Daftar? <Link href="/signup">Create an account</Link></p>
       </form>
     </div>
   );

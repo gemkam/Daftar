@@ -14,7 +14,8 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { sb, setAppRole } from '@/lib/supabase';
-import { loadAddedCompanies } from '@/lib/expenses';
+import { loadAddedCompanies, keepCompanies, COMPANIES } from '@/lib/expenses';
+import { myCompanyKeys } from '@/lib/companyAccess';
 import FaisalAssistant from '@/components/NoorAssistant';
 import { FaisalCtx, defaultGreeting } from '@/components/FaisalContext';
 import ThemeMenu from '@/components/ThemeMenu';
@@ -49,6 +50,9 @@ export const ROLES = {
   driver: { label: 'Driver', short: 'Driver' }
 };
 
+/* 🙋 pages a signed up user cannot open (shared or another company's) */
+const SELF_BLOCKED = ['/transport', '/entry', '/lead-staff', '/chairman', '/faisal', '/sitemap', '/timeline', '/docs', '/system-admin-activity', '/alipack', '/activity'];
+
 const UserCtx = createContext({ isAdmin: false, isOwner: false, role: '', name: '' });
 
 export function useUser() {
@@ -60,7 +64,8 @@ function readUser(session) {
   if (!u) return null;
   const role = u.app_metadata?.role || 'viewer';
   const name = u.user_metadata?.display_name || (u.email || '').split('@')[0];
-  return { id: u.id, username: (u.email || '').split('@')[0], name, ...roleFlags(role) };
+  // isSelf = made his own login on /signup (19 Nov 2026): sees only his own companies
+  return { id: u.id, username: (u.email || '').split('@')[0], name, isSelf: u.app_metadata?.self === true, ...roleFlags(role) };
 }
 
 /* what an access level may do (also used for the level of one company page, lib/pageAccess.js) */
@@ -97,7 +102,10 @@ export default function AuthGate({ children, adminOnly = false, ownerOnly = fals
       setAppRole(u?.role || '');
       if (!u) router.replace('/login');
       else if (u.isEntry && !entryPage) router.replace('/entry'); // data entry users only see the entry form
-      else if (u.canRead) loadAddedCompanies(supabase).then(() => setUser(u)); // ＋ Add company: extra companies first
+      else if (u.canRead) loadAddedCompanies(supabase).then(async () => { // ＋ Add company: extra companies first
+        if (u.isSelf) { const k = await myCompanyKeys(u).catch(() => []); if (k !== 'all') keepCompanies(k); } // 🙋 only his own companies
+        setUser(u);
+      });
       else setUser(u);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -117,6 +125,14 @@ export default function AuthGate({ children, adminOnly = false, ownerOnly = fals
   useEffect(() => {
     if (user && path) logPage(path);
   }, [user, path]);
+
+  // 🙋 signed up user: Inventory pages without ?co= are the shared inventory, open his own company's instead
+  useEffect(() => {
+    if (!user?.isSelf || !path) return;
+    if (['/inventory', '/bills', '/log', '/inventory/reports'].includes(path) && !new URLSearchParams(window.location.search).get('co')) {
+      router.replace(COMPANIES[0] ? `${path}?co=${COMPANIES[0].key}` : '/');
+    }
+  }, [user, path, router]);
 
   // Edit password: opening another page locks editing again
   useEffect(() => { lockEdit(); }, [path]);
@@ -180,7 +196,7 @@ export default function AuthGate({ children, adminOnly = false, ownerOnly = fals
 
   // Sitemap and Timeline moved to the right side, just before Day / Night (4 Nov 2026)
   const nav = user.isEntry ? [['/entry', 'Data entry', 'entry'], ['/chat', 'Chat', 'chat']] : [['/', 'Home', 'home']];
-  const sideLinks = user.isEntry ? [] : [['/sitemap', 'Sitemap', 'map'], ['/timeline', 'Timeline', 'clock']];
+  const sideLinks = user.isEntry || user.isSelf ? [] : [['/sitemap', 'Sitemap', 'map'], ['/timeline', 'Timeline', 'clock']];
   // Phone / tablet: quick buttons next to Home (on Home the alerts list pushes the tiles far down)
   // Transport lives inside Office Expense (4th tab), so it has no top bar button of its own
   const quick = user.canRead ? [['/inventory', 'Inventory', 'box'], ['/expenses', 'All Companies', 'receipt']] : [];
@@ -202,11 +218,13 @@ export default function AuthGate({ children, adminOnly = false, ownerOnly = fals
   if (user.canRead) quick.push(['/chat', 'Chat', 'chat']); // 💬 Chat (11 Nov 2026)
   if (user.canRead) quick.push(['/alerts', 'Alerts', 'bell']); // 🔔 Alerts (19 Nov 2026): Android / iOS only (CSS .mob-only), before Admin; replaces the alarm clock there
   if (user.isOwner) quick.push(['/admin', 'Admin', 'shield']); // company buttons moved to All Companies (9 Nov 2026)
+  if (user.isSelf) quick.length = 0; // 🙋 signed up user: Home only, his companies are on Home
 
   let blocked = '';
   if (ownerOnly && !user.isOwner) blocked = 'Only Administrator can open this page.';
   else if (adminOnly && !user.isAdmin) blocked = 'You need Full access to open this page.';
   if (!blocked && gate?.block) blocked = gate.block;
+  if (!blocked && user.isSelf && SELF_BLOCKED.some((x) => path === x || path.startsWith(`${x}/`))) blocked = 'This page is not part of your company.';
   const adminLocked = !blocked && user.isOwner && isAdminArea(path) && !adminOk && !isAdminOpen();
 
   return (
@@ -253,7 +271,7 @@ export default function AuthGate({ children, adminOnly = false, ownerOnly = fals
       {!user.isEntry && (
         <div className="who-bar no-print" role="status">
           <span className="who-av" aria-hidden="true">{(user.name || '?').charAt(0).toUpperCase()}</span>
-          <span>Logged in as <b>{user.name ? user.name.charAt(0).toUpperCase() + user.name.slice(1) : user.username}</b> · {ROLES[user.role]?.label || user.role}</span>
+          <span>Logged in as <b>{user.name ? user.name.charAt(0).toUpperCase() + user.name.slice(1) : user.username}</b> · {user.isSelf ? 'Company owner' : ROLES[user.role]?.label || user.role}</span>
         </div>
       )}
       {/* Driver login: who is logged in + Logout, always visible (so the office can leave a driver login while testing) */}
