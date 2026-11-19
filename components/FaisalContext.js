@@ -23,6 +23,8 @@ export function defaultGreeting(name) {
   const who = name ? ` ${name}` : '';
   return {
     en: `${part}${who}! I am Faisal, your assistant for the whole Daftar Office System: alerts, payments to make and collect, transport, office expenses, invoices and inventory. How can I help you? Please go ahead, I am listening.`,
-    ru: `Assalam o Alaikum${who}! Main Faisal hoon, poore Daftar Office System ka assistant: alerts, payments, transport, office kharcha, invoices aur inventory. Main aap ki kya madad kar sakta hoon? Boliye, main sun raha hoon.`
+    ru: `Assalam o Alaikum${who}! Main Faisal hoon, poore Daftar Office System ka assistant: alerts, payments, transport, office kharcha, invoices aur inventory. Main aap ki kya madad kar sakta hoon? Boliye, main sun raha hoon.`,
+    ur: `السلام علیکم${who}! میں فیصل ہوں، پورے دفتر آفس سسٹم کا اسسٹنٹ: الرٹس، ادائیگیاں، ٹرانسپورٹ، دفتر کا خرچہ، انوائسز اور انوینٹری۔ میں آپ کی کیا مدد کر سکتا ہوں؟ بولیے، میں سن رہا ہوں۔`,
+    ar: `${h < 12 ? 'صباح الخير' : 'مساء الخير'}${who}! أنا فيصل، مساعدك في كل نظام دفتر: التنبيهات، الفلوس اللي عليك واللي لك، النقل، مصاريف المكتب، الفواتير والمخزون. شو أقدر أسوي لك؟ تفضّل، أنا أسمعك.`
   };
 }

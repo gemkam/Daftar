@@ -5113,3 +5113,24 @@ img.cd-logo[src*="barq-express-logo"] { width: 160px; padding: 0; background: tr
 .rp-chip.active.wb-up { opacity: .8; }
 
 .inv-switch { justify-content: center; margin: 0 auto 18px; }
+
+/* ===== Daftar: language button and Arabic (right-to-left) ===== */
+html.tr-wait body { visibility: hidden; }
+.lang-switch {
+  display: inline-grid; place-items: center; min-width: 36px; height: 36px; padding: 0 8px;
+  border-radius: 10px; border: 1px solid rgba(255, 255, 255, .35); background: rgba(255, 255, 255, .14);
+  color: inherit; font: 700 15px/1 'Tajawal', 'Work Sans', sans-serif; cursor: pointer;
+}
+.lang-switch:hover { background: rgba(255, 255, 255, .26); }
+.login { position: relative; }
+.lang-switch.login-lang { position: absolute; top: 14px; inset-inline-end: 14px; color: var(--ink, #1d2b36); border-color: rgba(0, 0, 0, .18); background: rgba(255, 255, 255, .7); }
+html.ui-ar body, html.ui-ar button, html.ui-ar input, html.ui-ar select, html.ui-ar textarea { font-family: 'Tajawal', 'Work Sans', system-ui, sans-serif; }
+html.ui-ar h1, html.ui-ar h2, html.ui-ar h3 { font-family: 'Tajawal', 'Fraunces', serif; letter-spacing: 0; }
+html.ui-ar th, html.ui-ar td { text-align: start; }
+html.ui-ar .num, html.ui-ar td.num, html.ui-ar th.num, html.ui-ar input[type="number"], html.ui-ar [data-num] { direction: ltr; unicode-bidi: plaintext; }
+html.ui-ar .dx-intro { direction: ltr; }
+/* Faisal: four language buttons (English, العربية, اردو, Roman Urdu) */
+.noor-lang button { padding: 7px 4px; font-size: 12.5px; white-space: nowrap; }
+.noor-lang button[lang="ar"], .noor-lang button[lang="ur"] { font-family: 'Tajawal', 'Noto Nastaliq Urdu', Tahoma, sans-serif; font-size: 13.5px; }
+.noor-panel.lang-ar .noor-list, .noor-panel.lang-ar .noor-input, .noor-panel.lang-ar textarea, .noor-panel.lang-ar input { font-family: 'Tajawal', Tahoma, sans-serif; }
+.noor-panel.lang-ur .noor-list, .noor-panel.lang-ur textarea, .noor-panel.lang-ur input { font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', Tahoma, sans-serif; line-height: 1.9; }

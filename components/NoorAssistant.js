@@ -30,11 +30,30 @@ const TXT = {
     talkOn: 'Talk mode on: bas boliye, main jawab de kar phir sunoonga', talk: 'Baat', hint: 'Assalam o Alaikum, main Faisal hoon 👋 Mujhe kahin bhi le jayein',
     micBlocked: 'Microphone band hai. Browser settings mein is site ke liye microphone allow kariye, phir dobara try kariye.',
     noMic: 'Yeh browser sun nahi sakta. Google Chrome ya Microsoft Edge use kariye.'
+  },
+  ar: {
+    status: { idle: 'متصل', listening: 'قاعد أسمع...', thinking: 'قاعد أفكر...', speaking: 'قاعد أتكلم...' },
+    starters: ['عطني ملخص سريع', 'أي شركة صرفت أكثر شي؟', 'شو اللي يبغى انتباهي؟', 'كم الباقي ما انصرف؟', 'قارن مع الشهر اللي فات'],
+    placeholder: 'اسأل فيصل أي شي', listenPh: 'قاعد أسمع... تكلّم الحين', silence: 'بجاوب بعد ٣ ثواني سكوت',
+    talkOn: 'وضع الكلام شغّال: بس تكلّم، بجاوب وبعدين أسمع مرة ثانية', talk: 'كلام', hint: 'هلا، أنا فيصل 👋 اسحبني لأي مكان',
+    micBlocked: 'المايكروفون مقفول. اسمح للمايكروفون لهالموقع من إعدادات المتصفح، بعدين جرّب مرة ثانية.',
+    noMic: 'هالمتصفح ما يقدر يسمع. استخدم جوجل كروم أو مايكروسوفت إيدج.'
+  },
+  ur: {
+    status: { idle: 'آن لائن', listening: 'سن رہا ہوں...', thinking: 'سوچ رہا ہوں...', speaking: 'بول رہا ہوں...' },
+    starters: ['مختصر خلاصہ بتائیے', 'سب سے زیادہ خرچہ کس کمپنی کا ہے؟', 'کن چیزوں پر توجہ چاہیے؟', 'کتنی ادائیگی باقی ہے؟', 'پچھلے مہینے سے موازنہ کیجیے'],
+    placeholder: 'فیصل سے کچھ بھی پوچھیے', listenPh: 'سن رہا ہوں... بولیے', silence: '3 سیکنڈ خاموشی کے بعد جواب دوں گا',
+    talkOn: 'ٹاک موڈ آن: بس بولیے، میں جواب دے کر پھر سنوں گا', talk: 'بات', hint: 'السلام علیکم، میں فیصل ہوں 👋 مجھے کہیں بھی لے جائیں',
+    micBlocked: 'مائیکروفون بند ہے۔ براؤزر کی سیٹنگز میں اس سائٹ کے لیے مائیکروفون کی اجازت دیں، پھر دوبارہ کوشش کریں۔',
+    noMic: 'یہ براؤزر سن نہیں سکتا۔ گوگل کروم یا مائیکروسافٹ ایج استعمال کریں۔'
   }
 };
+/* Assistant languages (Daftar, 19 Nov 2026): English first, then Omani Arabic, Urdu script, Roman Urdu */
+const LANGS = [['en', 'English'], ['ar', 'العربية'], ['ur', 'اردو'], ['ru', 'Roman Urdu']];
+const SPEECH_LANG = { en: 'en-US', ar: 'ar-OM', ur: 'ur-PK', ru: 'en-IN' };
 
-const FEMALE = /(female|woman|zira|aria|jenny|sonia|libby|hazel|susan|samantha|victoria|karen|moira|tessa|fiona|serena|veena|heera|neerja|kalpana|swara|lekha|ananya|aditi|raveena|salli|joanna|kendra|kimberly|ivy|emma|amy|natasha|ava|allison|michelle|nicky|catherine|clara|google uk english female|google us english|google हिन्दी|google english \(india\))/i;
-const MALE = /(\bmale\b|david|mark|george|ravi|hemant|prabhat|daniel|alex|fred|rishi|guy|ryan|madhur|thomas|james|william|brian|matthew|justin|joey|andrew|christopher|eric|roger|steffan|google uk english male)/i;
+const FEMALE = /(female|woman|aysha|amina|uzma|zariyah|fatima|laila|layla|amany|salma|hala|mouna|noura|sana|hoda|maryam|zira|aria|jenny|sonia|libby|hazel|susan|samantha|victoria|karen|moira|tessa|fiona|serena|veena|heera|neerja|kalpana|swara|lekha|ananya|aditi|raveena|salli|joanna|kendra|kimberly|ivy|emma|amy|natasha|ava|allison|michelle|nicky|catherine|clara|google uk english female|google us english|google हिन्दी|google english \(india\))/i;
+const MALE = /(\bmale\b|abdullah|hamed|fahed|naayf|asad|salman|bassel|hamdan|omar|taim|rami|maged|shakir|david|mark|george|ravi|hemant|prabhat|daniel|alex|fred|rishi|guy|ryan|madhur|thomas|james|william|brian|matthew|justin|joey|andrew|christopher|eric|roger|steffan|google uk english male)/i;
 
 function bestVoice(lang) {
   const all = window.speechSynthesis?.getVoices() || [];
@@ -48,8 +67,14 @@ function bestVoice(lang) {
     want.forEach((w, i) => { if (L(v).startsWith(w)) s += 8 - i * 2; });
     return s;
   };
-  const want = lang === 'ru' ? ['en-in', 'hi-in', 'ur', 'en-gb', 'en-us'] : ['en-gb', 'en-us', 'en-in', 'en'];
-  const pool = all.filter((v) => want.some((w) => L(v).startsWith(w)) || L(v).startsWith('en'));
+  const WANT = {
+    ru: ['en-in', 'hi-in', 'ur', 'en-gb', 'en-us'],
+    ur: ['ur-pk', 'ur-in', 'ur', 'hi-in'],
+    ar: ['ar-om', 'ar-ae', 'ar-sa', 'ar-qa', 'ar-kw', 'ar-bh', 'ar'],
+    en: ['en-gb', 'en-us', 'en-in', 'en']
+  };
+  const want = WANT[lang] || WANT.en;
+  const pool = all.filter((v) => want.some((w) => L(v).startsWith(w)) || ((lang === 'en' || lang === 'ru') && L(v).startsWith('en')));
   const best = pool.sort((a, b) => score(b, want) - score(a, want))[0];
   return best ? { voice: best, male: MALE.test(best.name) && !FEMALE.test(best.name) } : { voice: null, male: false };
 }
@@ -191,7 +216,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
   const live = useRef({});
   const greeted = useRef(false);
   live.current = { msgs, lang, voiceOn, talk, context, mode, page };
-  const t = TXT[lang];
+  const t = TXT[lang] || TXT.en;
 
   /* ---------- load and save ---------- */
   useEffect(() => {
@@ -199,7 +224,8 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
     if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
     try {
       const s = JSON.parse(localStorage.getItem(SET_KEY) || 'null');
-      if (s?.lang) setLang(s.lang);
+      if (s?.lang && TXT[s.lang]) setLang(s.lang);
+      else { try { if (localStorage.getItem('daftar-ui-lang') === 'ar') setLang('ar'); } catch { /* ignore */ } }
       if (typeof s?.voiceOn === 'boolean') setVoiceOn(s.voiceOn);
       const c = JSON.parse(localStorage.getItem(CHAT_KEY) || 'null');
       if (Array.isArray(c)) setMsgs(c.slice(-20).map((m) => ({ ...m, fresh: false })));
@@ -293,7 +319,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
       greeted.current = true;
       setTalk(true);
       live.current.talk = true;
-      speak(greeting?.[lang] || '', -2, () => { if (live.current.talk) setTimeout(() => startListening(true), 400); });
+      speak(greeting?.[lang] || greeting?.en || '', -2, () => { if (live.current.talk) setTimeout(() => startListening(true), 400); });
     } else { stopAll(); setTalk(false); }
   }
 
@@ -317,7 +343,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
     setMode('speaking');
     parts.forEach((part, i) => {
       const u = new SpeechSynthesisUtterance(part);
-      if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = live.current.lang === 'ru' ? 'en-IN' : 'en-GB';
+      if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = SPEECH_LANG[live.current.lang] || 'en-GB';
       u.rate = 0.96;
       u.pitch = male ? 1 : 0.8; // deeper if no male voice was found
       if (i === parts.length - 1) {
@@ -356,7 +382,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
     want.current = true;
     let finished = false;
     const rec = new SR();
-    rec.lang = live.current.lang === 'ru' ? 'en-IN' : 'en-US';
+    rec.lang = SPEECH_LANG[live.current.lang] || 'en-US';
     rec.continuous = true;
     rec.interimResults = true;
     rec.maxAlternatives = 1;
@@ -493,7 +519,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
       </button>
 
       {open && (
-        <section className={`noor-panel ${sheet ? 'sheet' : ''}`} style={panelStyle} role="dialog" aria-label="Faisal, AI assistant">
+        <section data-no-tr dir={lang === 'ar' || lang === 'ur' ? 'rtl' : 'ltr'} className={`noor-panel ${sheet ? 'sheet' : ''} lang-${lang}`} style={panelStyle} role="dialog" aria-label="Faisal, AI assistant">
           <header className="noor-head">
             <Face mode={mode} size="small" pic={pic} />
             <div className="noor-who">
@@ -511,13 +537,14 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
           </header>
 
           <div className="noor-lang" role="group" aria-label="Language">
-            <button type="button" className={lang === 'en' ? 'on' : ''} onClick={() => changeLang('en')} aria-pressed={lang === 'en'}>English</button>
-            <button type="button" className={lang === 'ru' ? 'on' : ''} onClick={() => changeLang('ru')} aria-pressed={lang === 'ru'}>Roman Urdu</button>
+            {LANGS.map(([k, label]) => (
+              <button key={k} type="button" className={lang === k ? 'on' : ''} onClick={() => changeLang(k)} aria-pressed={lang === k} lang={k === 'ru' ? 'en' : k}>{label}</button>
+            ))}
           </div>
 
           <div className="noor-list" ref={listRef} aria-live="polite">
             <div className="noor-msg bot greet">
-              {greeting?.[lang]}
+              {greeting?.[lang] || greeting?.en}
               {speakingIdx === -2 && <button type="button" className="noor-mini on" onClick={() => { stopSpeaking(); setMode('idle'); }}>■ Stop</button>}
             </div>
             {msgs.length === 0 && (

@@ -162,7 +162,7 @@ function SummaryPage() {
   const aiGreeting = useMemo(() => {
     if (!G || !period) return null;
     const pl = periodLabelOf(period, monthLabel);
-    return { en: groupGreeting({ G, periodLabel: pl, extraAlerts: vehicleAlerts, lang: 'en' }), ru: groupGreeting({ G, periodLabel: pl, extraAlerts: vehicleAlerts, lang: 'ru' }) };
+    return { en: groupGreeting({G, periodLabel: pl, extraAlerts: vehicleAlerts, lang: 'en' }), ar: groupGreeting({G, periodLabel: pl, extraAlerts: vehicleAlerts, lang: 'ar' }), ur: groupGreeting({G, periodLabel: pl, extraAlerts: vehicleAlerts, lang: 'ur' }), ru: groupGreeting({G, periodLabel: pl, extraAlerts: vehicleAlerts, lang: 'ru' }) };
   }, [G, period, vehicleAlerts]);
 
   // Faisal (in AuthGate, on every page) gets this page's numbers too

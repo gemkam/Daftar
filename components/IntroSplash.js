@@ -187,7 +187,7 @@ export default function IntroSplash() {
   if (state === 'gone') return null;
 
   return (
-    <div key={run} className={`dx-intro${state === 'out' ? ' is-out' : ''}`} role="presentation" onClick={leave}>
+    <div key={run} data-no-tr className={`dx-intro${state === 'out' ? ' is-out' : ''}`} role="presentation" onClick={leave}>
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <span className="dx-glow" aria-hidden="true" />
       {SPARKS.map((s, i) => (

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import LangSwitch from '@/components/LangSwitch';
 import { useRouter } from 'next/navigation';
 import { sb } from '@/lib/supabase';
 
@@ -39,6 +40,7 @@ export default function LoginPage() {
 
   return (
     <div className="login">
+      <LangSwitch className="login-lang" />
       <form className="login-card panel" onSubmit={submit}>
         <h1>Daftar Office System</h1>
         {out && <div className="logout-note">✅ You have logged out. Nothing is shown until you log in again.</div>}
