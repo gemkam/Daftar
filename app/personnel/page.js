@@ -94,7 +94,7 @@ function PersonnelPage() {
   const [send, setSend] = useState(null); // { table, row }
   const [archived, setArchived] = useState([]); // [{ table, row }]
   const [papersOn, setPapersOn] = useState(false); // ⋯ More (Contract, Resident card, Passport) locked until ✏️ Edit › Enable papers
-  const [salaryOn, setSalaryOn] = useState(false); // Salary Credited, 👁 Slip and 📤 Send To Employee stay locked until ✏️ Edit › Enable
+  const [salaryOn, setSalaryOn] = useState(false); // Salary Credited stays locked until ✏️ Edit › Enable. 👁 Slip and 📤 Send To Employee are always open (view only, Daftar 19 Nov 2026)
   const [coDetail, setCoDetail] = useState(''); // company shown as a full table (from All companies ▾)
   const [viewArch, setViewArch] = useState(null);
   const [delReason, setDelReason] = useState('');
@@ -343,10 +343,10 @@ function PersonnelPage() {
   const slipsOf = (table, row) => slipsAll.filter((x) => x.person_kind === kindOf(table) && x.person_id === row.id);
   const slipCell = (table) => (row) => (
     <div className="pn-cell">
-      <button type="button" className="dfl-more" disabled={!salaryOn} title={salaryOn ? '' : 'Locked: ✏️ Edit › Enable salary buttons'} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setViewSlip({ name: row.name, kind: kindOf(table), id: row.id }); }}>
+      <button type="button" className="dfl-more" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setViewSlip({ name: row.name, kind: kindOf(table), id: row.id }); }}>
         👁 Slip{slipsOf(table, row).length ? ` (${slipsOf(table, row).length})` : ''}
       </button>
-      {isAdmin && <button type="button" className="dfl-more pn-send" disabled={!salaryOn} title={salaryOn ? '' : 'Locked: ✏️ Edit › Enable salary buttons'} onClick={(e) => { e.stopPropagation(); setSend({ table, row }); }} onMouseDown={(e) => e.stopPropagation()}>📤 Send To Employee</button>}
+      {isAdmin && <button type="button" className="dfl-more pn-send" onClick={(e) => { e.stopPropagation(); setSend({ table, row }); }} onMouseDown={(e) => e.stopPropagation()}>📤 Send To Employee</button>}
     </div>
   );
   const paidCol = (table) => ({
