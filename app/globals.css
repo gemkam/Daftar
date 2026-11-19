@@ -5134,3 +5134,6 @@ html.ui-ar .dx-intro { direction: ltr; }
 .noor-lang button[lang="ar"], .noor-lang button[lang="ur"] { font-family: 'Tajawal', 'Noto Nastaliq Urdu', Tahoma, sans-serif; font-size: 13.5px; }
 .noor-panel.lang-ar .noor-list, .noor-panel.lang-ar .noor-input, .noor-panel.lang-ar textarea, .noor-panel.lang-ar input { font-family: 'Tajawal', Tahoma, sans-serif; }
 .noor-panel.lang-ur .noor-list, .noor-panel.lang-ur textarea, .noor-panel.lang-ur input { font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', Tahoma, sans-serif; line-height: 1.9; }
+/* Assistant chooser: Faisal (man) / Samiya (woman) */
+.noor-who-pick { margin-top: 6px; }
+.noor-who-pick button { font-size: 12.5px; }

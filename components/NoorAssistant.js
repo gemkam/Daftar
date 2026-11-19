@@ -52,16 +52,39 @@ const TXT = {
 const LANGS = [['en', 'English'], ['ar', 'العربية'], ['ur', 'اردو'], ['ru', 'Roman Urdu']];
 const SPEECH_LANG = { en: 'en-US', ar: 'ar-OM', ur: 'ur-PK', ru: 'en-IN' };
 
+/* Two assistants (Daftar, 19 Nov 2026, Owner): Faisal (man) and Samiya (woman). The user picks one; saved on this device. */
+export const PERSONA_KEY = 'daftar-assistant';
+const PERSONAS = {
+  faisal: { key: 'faisal', male: true, name: { en: 'Faisal', ru: 'Faisal', ar: 'فيصل', ur: 'فیصل' } },
+  samiya: { key: 'samiya', male: false, name: { en: 'Samiya', ru: 'Samiya', ar: 'سامية', ur: 'سامیہ' } }
+};
+const NAME_RE = /Faisal|فيصل|فیصل/g;
+/* put the chosen assistant's name in, and for Samiya use the woman's verb forms */
+function asPersona(text, lang, p) {
+  if (!text || typeof text !== 'string') return text;
+  let out = text.replace(NAME_RE, (m) => (m === 'فيصل' ? p.name.ar : m === 'فیصل' ? p.name.ur : p.name.en));
+  if (p.male) return out;
+  if (lang === 'ru') {
+    out = out.replace(/\braha\b/g, 'rahi').replace(/\bsakta\b/g, 'sakti').replace(/doonga\b/g, 'doongi').replace(/sunoonga\b/g, 'sunoongi')
+      .replace(/\bkarta\b/g, 'karti').replace(/\bleta\b/g, 'leti').replace(/\bbata raha\b/g, 'bata rahi');
+  } else if (lang === 'ur') {
+    out = out.replace(/رہا/g, 'رہی').replace(/سکتا/g, 'سکتی').replace(/دوں گا/g, 'دوں گی').replace(/سنوں گا/g, 'سنوں گی').replace(/کرتا/g, 'کرتی').replace(/لیتا/g, 'لیتی');
+  } else if (lang === 'ar') {
+    out = out.replace(/مساعدك/g, 'مساعدتك').replace(/قاعد /g, 'قاعدة ').replace(/أنا سامية، مساعدتك/g, 'أنا سامية، مساعدتك');
+  }
+  return out;
+}
+
 const FEMALE = /(female|woman|aysha|amina|uzma|zariyah|fatima|laila|layla|amany|salma|hala|mouna|noura|sana|hoda|maryam|zira|aria|jenny|sonia|libby|hazel|susan|samantha|victoria|karen|moira|tessa|fiona|serena|veena|heera|neerja|kalpana|swara|lekha|ananya|aditi|raveena|salli|joanna|kendra|kimberly|ivy|emma|amy|natasha|ava|allison|michelle|nicky|catherine|clara|google uk english female|google us english|google हिन्दी|google english \(india\))/i;
 const MALE = /(\bmale\b|abdullah|hamed|fahed|naayf|asad|salman|bassel|hamdan|omar|taim|rami|maged|shakir|david|mark|george|ravi|hemant|prabhat|daniel|alex|fred|rishi|guy|ryan|madhur|thomas|james|william|brian|matthew|justin|joey|andrew|christopher|eric|roger|steffan|google uk english male)/i;
 
-function bestVoice(lang) {
+function bestVoice(lang, wantMale = true) {
   const all = window.speechSynthesis?.getVoices() || [];
   const L = (v) => (v.lang || '').toLowerCase().replace('_', '-');
   const score = (v, want) => {
     let s = 0;
-    if (MALE.test(v.name)) s += 6;
-    if (FEMALE.test(v.name)) s -= 12;
+    if (MALE.test(v.name)) s += wantMale ? 6 : -12;
+    if (FEMALE.test(v.name)) s += wantMale ? -12 : 6;
     if (/natural|online|neural|premium|enhanced/i.test(v.name)) s += 3;
     if (/google/i.test(v.name)) s += 2;
     want.forEach((w, i) => { if (L(v).startsWith(w)) s += 8 - i * 2; });
@@ -76,7 +99,7 @@ function bestVoice(lang) {
   const want = WANT[lang] || WANT.en;
   const pool = all.filter((v) => want.some((w) => L(v).startsWith(w)) || ((lang === 'en' || lang === 'ru') && L(v).startsWith('en')));
   const best = pool.sort((a, b) => score(b, want) - score(a, want))[0];
-  return best ? { voice: best, male: MALE.test(best.name) && !FEMALE.test(best.name) } : { voice: null, male: false };
+  return best ? { voice: best, male: MALE.test(best.name) && !FEMALE.test(best.name), female: FEMALE.test(best.name) && !MALE.test(best.name) } : { voice: null, male: false, female: false };
 }
 
 // Split the "NEXT: a | b" line off the answer
@@ -101,7 +124,7 @@ function TypeText({ text, fresh, onTick }) {
 }
 
 // Faisal's face: a friendly man with a trimmed beard (shirt follows the theme colour)
-function Avatar({ mode, uid }) {
+function Avatar({ mode, uid, female = false }) {
   const g = (n) => `${n}-${uid}`;
   return (
     <svg className="noor-svg" viewBox="9 8 82 82" aria-hidden="true">
@@ -130,16 +153,21 @@ function Avatar({ mode, uid }) {
         <path d="M10 104 C12 84 28 77 50 77 C72 77 88 84 90 104 Z" fill={`url(#${g('hj')})`} />
         <rect x="43" y="68" width="14" height="12" rx="3" fill="#dcaa88" />
         <path d="M41 77 L50 88 L59 77 L55 76 L50 82 L45 76 Z" fill="#fff" opacity=".9" />
+        {female && <path d="M24 104 C22 68 24 28 50 18 C76 28 78 68 76 104 Z" fill={`url(#${g('hj')})`} />}
         {/* ears */}
         <ellipse cx="31.5" cy="51" rx="3.2" ry="5" fill="#e2b08f" />
         <ellipse cx="68.5" cy="51" rx="3.2" ry="5" fill="#e2b08f" />
         {/* face */}
         <ellipse cx="50" cy="50" rx="18.5" ry="21.5" fill={`url(#${g('sk')})`} />
+        {female && <path fillRule="evenodd" d="M24 104 C22 68 24 28 50 18 C76 28 78 68 76 104 Z M50 30 C39 30 33.5 39 33.5 51 C33.5 64 41 73.5 50 73.5 C59 73.5 66.5 64 66.5 51 C66.5 39 61 30 50 30 Z" fill={`url(#${g('hj')})`} />}
+        {female && <path d="M36 34 C42 27.5 58 27.5 64 34" fill="none" stroke="#fff" strokeOpacity=".25" strokeWidth="1.6" strokeLinecap="round" />}
         {/* hair */}
-        <path d="M30.6 50 C28 29 38 21.5 50 21.5 C63 21.5 72 29 69.4 50 C68.4 40 64.5 34 57 32.8 C52 34.8 44 34.3 39 31.8 C33.5 34.5 31.6 41 30.6 50 Z" fill={`url(#${g('hr')})`} />
+        {!female && <path d="M30.6 50 C28 29 38 21.5 50 21.5 C63 21.5 72 29 69.4 50 C68.4 40 64.5 34 57 32.8 C52 34.8 44 34.3 39 31.8 C33.5 34.5 31.6 41 30.6 50 Z" fill={`url(#${g('hr')})`} />}
         {/* beard and moustache */}
+        {!female && <>
         <path d="M31.6 48 C32 65 40 75.5 50 75.5 C60 75.5 68 65 68.4 48 C66.5 56.5 63 60.5 58.5 61 C55.5 59 44.5 59 41.5 61 C37 60.5 33.5 56.5 31.6 48 Z" fill={`url(#${g('hr')})`} />
         <path d="M42.5 60.2 C45.5 57.6 48.6 57.8 50 59.2 C51.4 57.8 54.5 57.6 57.5 60.2 C54.6 61.6 52.2 61.4 50 60.6 C47.8 61.4 45.4 61.6 42.5 60.2 Z" fill="#1b1311" />
+        </>}
         {/* eyebrows */}
         <path className="nf-brow" d="M37.5 41.6 Q42 38.8 46.5 40.8" fill="none" stroke="#2b201c" strokeWidth="2.3" strokeLinecap="round" />
         <path className="nf-brow" d="M53.5 40.8 Q58 38.8 62.5 41.6" fill="none" stroke="#2b201c" strokeWidth="2.3" strokeLinecap="round" />
@@ -166,7 +194,7 @@ function Avatar({ mode, uid }) {
 }
 
 let faceId = 0;
-function Face({ mode, size = 'big', pic }) {
+function Face({ mode, size = 'big', pic, female = false }) {
   const [uid] = useState(() => `nf${++faceId}`);
   return (
     <span className={`noor-face ${size} m-${mode}`} aria-hidden="true">
@@ -175,7 +203,7 @@ function Face({ mode, size = 'big', pic }) {
       <span className={`noor-core ${pic?.kind === 'photo' ? 'has-photo' : ''}`}>
         {pic?.kind === 'photo'
           ? <img className="noor-photo" src={pic.src} alt="" draggable="false" />
-          : <Avatar mode={mode} uid={uid} />}
+          : <Avatar mode={mode} uid={uid} female={female} />}
       </span>
       {size === 'big' && <><span className="noor-spark s1" /><span className="noor-spark s2" /><span className="noor-spark s3" /></>}
       {mode === 'listening' && <><span className="noor-wave w1" /><span className="noor-wave w2" /><span className="noor-wave w3" /></>}
@@ -191,6 +219,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
   const [input, setInput] = useState('');
   const [mode, setMode] = useState('idle');
   const [lang, setLang] = useState('en');
+  const [who, setWho] = useState('faisal');
   const [voiceOn, setVoiceOn] = useState(true);
   const [talk, setTalk] = useState(false);
   const [pos, setPos] = useState(null);
@@ -215,8 +244,16 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
   const drag = useRef(null);
   const live = useRef({});
   const greeted = useRef(false);
-  live.current = { msgs, lang, voiceOn, talk, context, mode, page };
-  const t = TXT[lang] || TXT.en;
+  const P = PERSONAS[who] || PERSONAS.faisal;
+  live.current = { msgs, lang, voiceOn, talk, context, mode, page, P };
+  const base = TXT[lang] || TXT.en;
+  const t = {
+    ...Object.fromEntries(Object.entries(base).map(([k, v]) => [k, Array.isArray(v) ? v : typeof v === 'string' ? asPersona(v, lang, P) : v])),
+    status: Object.fromEntries(Object.entries(base.status).map(([k, v]) => [k, asPersona(v, lang, P)]))
+  };
+  const greet = asPersona(greeting?.[lang] || greeting?.en || '', lang, P);
+  const pName = P.name[lang] || P.name.en;
+  function choose(w) { if (w === who) return; stopAll(); setTalk(false); setWho(w); try { localStorage.setItem(PERSONA_KEY, w); } catch { /* ignore */ } }
 
   /* ---------- load and save ---------- */
   useEffect(() => {
@@ -224,6 +261,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
     if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
     try {
       const s = JSON.parse(localStorage.getItem(SET_KEY) || 'null');
+      try { const w = localStorage.getItem(PERSONA_KEY); if (PERSONAS[w]) setWho(w); } catch { /* ignore */ }
       if (s?.lang && TXT[s.lang]) setLang(s.lang);
       else { try { if (localStorage.getItem('daftar-ui-lang') === 'ar') setLang('ar'); } catch { /* ignore */ } }
       if (typeof s?.voiceOn === 'boolean') setVoiceOn(s.voiceOn);
@@ -319,7 +357,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
       greeted.current = true;
       setTalk(true);
       live.current.talk = true;
-      speak(greeting?.[lang] || greeting?.en || '', -2, () => { if (live.current.talk) setTimeout(() => startListening(true), 400); });
+      speak(asPersona(greeting?.[lang] || greeting?.en || '', live.current.lang, live.current.P), -2, () => { if (live.current.talk) setTimeout(() => startListening(true), 400); });
     } else { stopAll(); setTalk(false); }
   }
 
@@ -338,14 +376,14 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
     const clean = String(text).replace(/[*_#`]/g, '').replace(/\bOMR\b/g, 'Rials').replace(/(\d),(\d{3})/g, '$1$2').replace(/%/g, ' percent');
     const parts = clean.split(/(?<=[.!?\n])\s+/).flatMap((p) => p.match(/.{1,170}(\s|$)/g) || [p]).map((p) => p.trim()).filter(Boolean);
     if (!parts.length) { then?.(); return; }
-    const { voice, male } = bestVoice(live.current.lang);
+    const { voice, male, female } = bestVoice(live.current.lang, live.current.P.male);
     setSpeakingIdx(idx);
     setMode('speaking');
     parts.forEach((part, i) => {
       const u = new SpeechSynthesisUtterance(part);
       if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = SPEECH_LANG[live.current.lang] || 'en-GB';
       u.rate = 0.96;
-      u.pitch = male ? 1 : 0.8; // deeper if no male voice was found
+      u.pitch = live.current.P.male ? (male ? 1 : 0.8) : (female ? 1 : 1.2); // deeper / higher if the right voice was not found
       if (i === parts.length - 1) {
         const done = () => { if (my !== run.current) return; setSpeakingIdx(-1); setMode('idle'); then?.(); };
         u.onend = done; u.onerror = done;
@@ -453,7 +491,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
       const res = await fetch('/api/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session?.access_token || ''}` },
-        body: JSON.stringify({ scope: 'group', lang: live.current.lang, context: live.current.context, page: live.current.page, messages: next.filter((m) => !m.error).slice(-8).map(({ role, content }) => ({ role, content })) })
+        body: JSON.stringify({ scope: 'group', persona: live.current.P.key, lang: live.current.lang, context: live.current.context, page: live.current.page, messages: next.filter((m) => !m.error).slice(-8).map(({ role, content }) => ({ role, content })) })
       });
       const out = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(out.error || 'Faisal could not answer right now. Please try again.');
@@ -510,27 +548,27 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
         onPointerCancel={() => { drag.current = null; }}
         onKeyDown={onKeyDown}
         aria-expanded={open}
-        aria-label={open ? 'Close Faisal, the AI assistant' : 'Open Faisal, the AI assistant. Drag or use arrow keys to move.'}
-        title="Faisal · AI assistant (drag to move)"
+        aria-label={open ? `Close ${P.name.en}, the AI assistant` : `Open ${P.name.en}, the AI assistant. Drag or use arrow keys to move.`}
+        title={`${P.name.en} · AI assistant (drag to move)`}
       >
-        <Face mode={mode} pic={pic} />
+        <Face mode={mode} pic={P.male ? pic : { kind: 'drawn' }} female={!P.male} />
         {!seen && alertCount > 0 && <span className="noor-badge">{alertCount}</span>}
         {hint && <span className="noor-hint">{t.hint}</span>}
       </button>
 
       {open && (
-        <section data-no-tr dir={lang === 'ar' || lang === 'ur' ? 'rtl' : 'ltr'} className={`noor-panel ${sheet ? 'sheet' : ''} lang-${lang}`} style={panelStyle} role="dialog" aria-label="Faisal, AI assistant">
+        <section data-no-tr dir={lang === 'ar' || lang === 'ur' ? 'rtl' : 'ltr'} className={`noor-panel ${sheet ? 'sheet' : ''} lang-${lang}`} style={panelStyle} role="dialog" aria-label={`${P.name.en}, AI assistant`}>
           <header className="noor-head">
-            <Face mode={mode} size="small" pic={pic} />
+            <Face mode={mode} size="small" pic={P.male ? pic : { kind: 'drawn' }} female={!P.male} />
             <div className="noor-who">
-              <div className="noor-name">Faisal <span className="noor-tag">AI</span></div>
+              <div className="noor-name">{pName} <span className="noor-tag">AI</span></div>
               <div className={`noor-status s-${mode}`}><span className="noor-dot" />{status}</div>
             </div>
             <div className="noor-actions">
               <button type="button" className={`noor-ic ${voiceOn ? 'on' : ''}`} onClick={() => { if (voiceOn) stopSpeaking(); setVoiceOn((v) => !v); }} aria-pressed={voiceOn} title={voiceOn ? 'Voice on: Faisal reads answers aloud' : 'Voice off'}>
                 {voiceOn ? '🔊' : '🔇'}
               </button>
-              {canChangePic && <button type="button" className="noor-ic" onClick={() => setPicEdit(true)} title="Change Faisal picture" aria-label="Change Faisal picture">📷</button>}
+              {canChangePic && P.male && <button type="button" className="noor-ic" onClick={() => setPicEdit(true)} title="Change Faisal picture" aria-label="Change Faisal picture">📷</button>}
               {msgs.length > 0 && <button type="button" className="noor-ic" onClick={() => { stopAll(); setMsgs([]); }} title="Clear chat" aria-label="Clear chat">🗑</button>}
               <button type="button" className="noor-ic" onClick={toggle} title="Close" aria-label="Close">✕</button>
             </div>
@@ -541,10 +579,17 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
               <button key={k} type="button" className={lang === k ? 'on' : ''} onClick={() => changeLang(k)} aria-pressed={lang === k} lang={k === 'ru' ? 'en' : k}>{label}</button>
             ))}
           </div>
+          <div className="noor-lang noor-who-pick" role="group" aria-label="Assistant">
+            {Object.values(PERSONAS).map((x) => (
+              <button key={x.key} type="button" className={who === x.key ? 'on' : ''} onClick={() => choose(x.key)} aria-pressed={who === x.key}>
+                {x.male ? '👨' : '👩'} {x.name[lang] || x.name.en}
+              </button>
+            ))}
+          </div>
 
           <div className="noor-list" ref={listRef} aria-live="polite">
             <div className="noor-msg bot greet">
-              {greeting?.[lang] || greeting?.en}
+              {greet}
               {speakingIdx === -2 && <button type="button" className="noor-mini on" onClick={() => { stopSpeaking(); setMode('idle'); }}>■ Stop</button>}
             </div>
             {msgs.length === 0 && (
