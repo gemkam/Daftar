@@ -24,8 +24,8 @@ export function defaultGreeting(name) {
   const whoAr = /^admin$/i.test(name || '') || !name ? '' : ` ${name}`;
   return {
     en: `${timeHello('en')}${who}! How may I help you?`,
-    ru: `${timeHello('ru')}${who}! Main aap ki kya madad kar sakta hoon?`,
-    ur: `${timeHello('ur')}${who}! میں آپ کی کیا مدد کر سکتا ہوں؟`,
+    ru: 'Assalam o Alaikum! Kaise hain aap? Main aap ki kya madad kar sakta hoon?',
+    ur: 'السلام علیکم! کیسے ہیں آپ؟ میں آپ کی کیا مدد کر سکتا ہوں؟',
     ar: `${timeHello('ar')}${whoAr}! شو أقدر أسوي لك؟`
   };
 }
