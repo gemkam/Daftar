@@ -26,6 +26,6 @@ export function defaultGreeting(name) {
     en: `${timeHello('en')}${who}! How may I help you?`,
     ru: 'Assalam o Alaikum! Kaise hain aap? Main aap ki kya madad kar sakta hoon?',
     ur: 'السلام علیکم! کیسے ہیں آپ؟ میں آپ کی کیا مدد کر سکتا ہوں؟',
-    ar: `${timeHello('ar')}${whoAr}! شو أقدر أسوي لك؟`
+    ar: 'السلام عليكم يا سيدي! كيف حالك؟ شو أقدر أسوي لك؟'
   };
 }
