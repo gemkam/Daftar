@@ -23,15 +23,16 @@ function CompanyHome() {
   const [mine, setMine] = useState(null); // 🔑 his pages in this company (lib/pageAccess.js)
   useEffect(() => { loadMyPages(user).then(setMine).catch(() => setMine({})); }, [user]);
   const c = COMPANIES.find((x) => x.key === key);
+  const back = user.isSelf ? '/' : '/expenses';
 
   useEffect(() => {
     myCompanyKeys(user).then((k) => setAllowed(k === 'all' || k.includes(key))).catch(() => setAllowed(false));
     setOpen(isCompanyUnlocked(key));
   }, [user, key]);
 
-  if (!c) return <p className="empty">Company not found. <Link href="/expenses">Back to All Companies</Link></p>;
+  if (!c) return <p className="empty">Company not found. <Link href={back}>{user.isSelf ? 'Back to Home' : 'Back to All Companies'}</Link></p>;
   if (allowed === null) return <p className="muted">Loading...</p>;
-  if (!allowed) return <p className="empty">You have no access to {c.short}. Ask the Administrator. <Link href="/expenses">Back to All Companies</Link></p>;
+  if (!allowed) return <p className="empty">You have no access to {c.short}. Ask the Administrator. <Link href={back}>{user.isSelf ? 'Back to Home' : 'Back to All Companies'}</Link></p>;
   if (!open) {
     return (
       <div style={{ margin: '30px auto', maxWidth: 400 }}>
@@ -47,11 +48,12 @@ function CompanyHome() {
         <div>
           <h1>{c.short}</h1>
           <p className="sub">{c.name}{c.cr ? ` · ${c.cr}` : ''}{c.address ? ` · ${c.address}` : ''}</p>
+          {c.owner && <p className="sub">Owner: {c.owner}{c.ownerId ? ` · ID ${c.ownerId}` : ''}{c.vat ? ` · VAT ${c.vat}` : ''}</p>}
         </div>
         {!noPasswordCompany(key) && <button type="button" className="btn ghost cmp-lock" onClick={() => { lockCompany(key); router.push('/expenses'); }}>🔒 Lock and close</button>}
       </div>
       <div className="adm-grid">
-        {allowedTiles(key, companyPages(key), mine, user).map(([href, ico, label, sub]) => (
+        {allowedTiles(key, companyPages(key), mine, user).filter((t) => !user.isSelf || (t[4] !== 'docs' && t[4] !== 'transport')).map(([href, ico, label, sub]) => (
           <Link key={href} href={href} className="adm-tile">
             <span className="adm-ico" aria-hidden="true">{ico}</span>
             <span className="adm-tx"><b>{label}</b><small>{sub}</small></span>
