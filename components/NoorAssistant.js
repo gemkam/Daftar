@@ -413,7 +413,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
     stopSpeaking();
     if (!synth || !text) { then?.(); return; }
     const my = ++run.current;
-    const clean = String(text).replace(/[*_#`]/g, '').replace(/\bOMR\b/g, 'Rials').replace(/(\d),(\d{3})/g, '$1$2').replace(/%/g, ' percent');
+    const clean = String(text).replace(/[*_#`]/g, '').replace(/\bOMR\b/g, 'Rials').replace(/(\d),(\d{3})/g, '$1$2').replace(/%/g, ' percent').replace(/\bSamiya\b/g, 'Saa-mee-yah'); // say Samiya as Saa-mee-yah, not Samaya
     const parts = clean.split(/(?<=[.!?\n])\s+/).flatMap((p) => p.match(/.{1,170}(\s|$)/g) || [p]).map((p) => p.trim()).filter(Boolean);
     if (!parts.length) { then?.(); return; }
     const { voice, male, female } = bestVoice(live.current.lang, live.current.P.male);
