@@ -35,6 +35,8 @@ export default function RootLayout({ children }) {
         {/* Phone with Chrome "Desktop site" switched on: the page is laid out 980px wide and looks tiny.
             Scale it up to the phone's real width so text stays readable (31 Oct 2026).
             1 Nov 2026: also caught when Chrome reports the desktop width as the screen width (page shown shrunk). */}
+        {/* Android / iPhone / iPad: html.mobile-os (Alerts button in the top bar, no floating alarm clock), 19 Nov 2026 */}
+        <script dangerouslySetInnerHTML={{ __html: "(function(){try{var u=navigator.userAgent||'';if(/Android|iPhone|iPad|iPod/i.test(u)||(/Macintosh/.test(u)&&navigator.maxTouchPoints>1))document.documentElement.classList.add('mobile-os');}catch(e){}})();" }} />
         <script dangerouslySetInnerHTML={{ __html: "(function(){try{var d=document.documentElement;var coarse=window.matchMedia&&matchMedia('(pointer: coarse)').matches&&!matchMedia('(any-pointer: fine)').matches;var f=function(){var sw=screen.width;var w=window.innerWidth;var vv=window.visualViewport;var shrunk=vv&&vv.scale<0.8&&w>=900;if(coarse&&((sw&&sw<820&&w>sw*1.4)||shrunk)){d.style.zoom=((sw&&sw<820&&w>sw*1.4)?w/sw:1/vv.scale).toFixed(3);d.classList.add('desk-on-phone');}else{d.style.zoom='';d.classList.remove('desk-on-phone');}};f();window.addEventListener('resize',f);}catch(e){}})();" }} />
         {/* Speed (31 Oct 2026): open the database connection early, and load the Google fonts WITHOUT holding up the page
             (the page shows at once in the normal font, the nice font swaps in when it arrives). */}

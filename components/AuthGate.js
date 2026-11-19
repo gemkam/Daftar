@@ -200,6 +200,7 @@ export default function AuthGate({ children, adminOnly = false, ownerOnly = fals
   // The Faisal button moved inside Lead Staff › Admins; it lights up on /chairman and /faisal pages too
   if (canSeeLeadStaff(user)) quick.push(['/lead-staff', 'Lead Staff', 'crown']);
   if (user.canRead) quick.push(['/chat', 'Chat', 'chat']); // 💬 Chat (11 Nov 2026)
+  if (user.canRead) quick.push(['/alerts', 'Alerts', 'bell']); // 🔔 Alerts (19 Nov 2026): Android / iOS only (CSS .mob-only), before Admin; replaces the alarm clock there
   if (user.isOwner) quick.push(['/admin', 'Admin', 'shield']); // company buttons moved to All Companies (9 Nov 2026)
 
   let blocked = '';
@@ -241,7 +242,7 @@ export default function AuthGate({ children, adminOnly = false, ownerOnly = fals
             ))}
             {quick.length > 0 && <i className="tbx-sep" aria-hidden="true" />}
             {quick.map(([href, label, ico]) => (
-              <Link key={href} href={href} className={path === href || (href === '/admin' && ['/settings', '/users', '/activity'].some((x) => path.startsWith(x))) || (path.startsWith(`${href}/`) && !(href === '/expenses' && path.startsWith('/expenses/summary'))) || (href === '/expenses' && (path.startsWith('/transport') || path === '/docs')) || (href === '/lead-staff' && (path.startsWith('/chairman') || path.startsWith('/faisal'))) ? 'active' : ''}>
+              <Link key={href} href={href} className={(href === '/alerts' ? 'mob-only ' : '') + (path === href || (href === '/admin' && ['/settings', '/users', '/activity'].some((x) => path.startsWith(x))) || (path.startsWith(`${href}/`) && !(href === '/expenses' && path.startsWith('/expenses/summary'))) || (href === '/expenses' && (path.startsWith('/transport') || path === '/docs')) || (href === '/lead-staff' && (path.startsWith('/chairman') || path.startsWith('/faisal'))) ? 'active' : '')}>
                 <Ico name={ico} /><span>{label}</span>{href === '/chat' && chatN > 0 && <em className="tbx-badge">{chatN}</em>}
               </Link>
             ))}
@@ -313,6 +314,7 @@ const ICONS = {
   bank: <><path d="M3 9.5 12 4l9 5.5" /><path d="M4 9.5h16" /><path d="M6 10v8M10 10v8M14 10v8M18 10v8" /><path d="M3 20.5h18" /></>,
   user: <><circle cx="12" cy="8" r="4" /><path d="M4 21c.8-4.2 3.9-6.5 8-6.5s7.2 2.3 8 6.5" /></>,
   crown: <><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z" /><path d="M5 19h14" /></>,
+  bell: <><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z" /><path d="M10 20a2 2 0 0 0 4 0" /></>,
   shield: <><path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6z" /><path d="m9 12 2 2 4-4" /></>,
   gear: <><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1" /></>,
   chat: <><path d="M4 5h16v11H9l-5 4z" /><path d="M8 9.5h8M8 12.5h5" /></>,
