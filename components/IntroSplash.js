@@ -1,62 +1,143 @@
 'use client';
-// Opening animation. Plays every time the MAIN page (/) is opened or refreshed, and again from the "▶ Intro" button
-// on the Home page. Tap / click / any key skips it.
+// Opening animation (Daftar, 19 Nov 2026). Plays every time the MAIN page (/) is opened or refreshed, and again from
+// the "▶ Intro" button on the Home page. Tap / click / any key skips it.
 //
-// Story v3 (4 Nov 2026, Owner):
-//   0.0 s  the office scene is on screen at once and BOTH trucks are already in view (also on phones),
-//          driving towards each other on the highway in front of the Daftar office tower
-//   ~2.3 s the two trailers cross each other in front of the building
-//   2.6 s  the camera tilts up: the scene slides down, the sky turns from day blue to deep night blue
-//          with twinkling stars, a faint Milky Way and a shooting star (components/IntroSky.js)
-//   3.4 s  the Daftar logo (on a white card) comes into focus, DAFTAR, OFFICE SYSTEMS
-//   6.4 s  a crowd rises at the bottom and claps while "Powered by" and then "KS TECH LLC" appear
-//   ~12 s  everything fades and the normal page comes forward
+// Black stage:
+//   0.0 s  a gold light line opens from the centre, soft glow and floating sparks behind
+//   0.5 s  D A F T A R rises letter by letter (blur to sharp), then a gold shine runs across the word
+//   2.9 s  "POWERED BY" fades in, then K S  T E C H  L L C flips in letter by letter with a teal glow
+//   6.6 s  everything zooms softly and fades, the normal page comes forward
 // The overlay is in the server HTML so the page never flashes before it; INTRO_BOOT
 // (lib/intro.js, run in app/layout.js <head>) hides it at once on every page except the main page.
-// Styles: "Intro story v3" block at the end of app/globals.css (older intro blocks above it still give the base look).
+// All styles for this intro are inside this file (CSS below), so the old intro styles in globals.css do not apply.
 import { useEffect, useRef, useState } from 'react';
 import { INTRO_REPLAY } from '@/lib/intro';
-import IntroScene from '@/components/IntroScene';
-import { IntroSky, IntroCrowd } from '@/components/IntroSky';
 
-const CAM_AT = 2600;    // trailers have just crossed: camera goes up
-const BRAND_AT = 3400;  // logo part starts (its own animation delays count from here)
-const OUT_AT = 12000;   // KS TECH LLC done ~6.4 s after BRAND_AT, holds ~2 s, then fade out
-const OUT_MS = 900;     // length of the fade out
+const OUT_AT = 6600;  // start of the fade out
+const OUT_MS = 900;   // length of the fade out
 
-function Letters({ text, start, step, glint, className }) {
+/* Sparks: fixed positions (no random numbers, so the server and the browser draw the same thing) */
+const SPARKS = Array.from({ length: 34 }, (_, i) => ({
+  left: (i * 37 + 11) % 100,
+  top: (i * 53 + 7) % 100,
+  size: 2 + (i % 3),
+  delay: (i * 173) % 3000,
+  dur: 4200 + ((i * 271) % 3000)
+}));
+
+function Letters({ text, start, step, className, charClass, shineAt }) {
   let i = 0;
   return (
     <span className={className} aria-hidden="true">
       {text.split('').map((ch, k) => {
-        if (ch === ' ') return <span key={k} className="is-gap" />;
+        if (ch === ' ') return <span key={k} className="dx-gap" />;
         const d = start + step * i;
-        const g = glint != null ? glint + 40 * i : null;
         i += 1;
-        return (
-          <span key={k} className="is-ch" style={{ animationDelay: g != null ? `${d}ms, ${g}ms` : `${d}ms` }}>{ch}</span>
-        );
+        const delay = shineAt != null ? `${d}ms, ${shineAt + 70 * (i - 1)}ms` : `${d}ms`;
+        return <span key={k} className={charClass} style={{ animationDelay: delay }}>{ch}</span>;
       })}
     </span>
   );
 }
 
+const CSS = `
+html.intro-done .dx-intro { display: none !important; }
+.dx-intro {
+  position: fixed; inset: 0; z-index: 10000; overflow: hidden; cursor: pointer;
+  display: grid; place-items: center; background: #000; color: #fff;
+  font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-user-select: none; user-select: none;
+}
+.dx-intro.is-out { animation: dx-out ${OUT_MS}ms cubic-bezier(.7, 0, .84, 0) forwards; }
+@keyframes dx-out { to { opacity: 0; transform: scale(1.08); filter: blur(6px); } }
+
+/* background: slow glow, vignette, sparks */
+.dx-glow {
+  position: absolute; width: 140vmax; height: 140vmax; left: 50%; top: 50%; translate: -50% -50%;
+  background: radial-gradient(circle, rgba(212, 166, 60, .16) 0%, rgba(13, 110, 110, .10) 28%, rgba(0, 0, 0, 0) 55%);
+  opacity: 0; animation: dx-glow-in 1.6s ease .2s forwards, dx-breathe 5s ease-in-out 1.8s infinite;
+}
+@keyframes dx-glow-in { to { opacity: 1; } }
+@keyframes dx-breathe { 50% { transform: scale(1.08); } }
+.dx-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, #000 100%); }
+.dx-spark {
+  position: absolute; border-radius: 50%; background: #f3d27a; box-shadow: 0 0 8px 2px rgba(243, 210, 122, .55);
+  opacity: 0; animation-name: dx-float; animation-timing-function: ease-in-out; animation-iteration-count: infinite;
+}
+@keyframes dx-float {
+  0% { opacity: 0; transform: translateY(20px) scale(.6); }
+  30% { opacity: .9; }
+  100% { opacity: 0; transform: translateY(-90px) scale(1); }
+}
+
+/* centre */
+.dx-center { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 0 16px; }
+
+.dx-line {
+  height: 2px; width: min(72vw, 620px); margin-bottom: 22px;
+  background: linear-gradient(90deg, rgba(243,210,122,0), #f3d27a 30%, #fff 50%, #f3d27a 70%, rgba(243,210,122,0));
+  box-shadow: 0 0 18px rgba(243, 210, 122, .7);
+  transform: scaleX(0); animation: dx-line-open .9s cubic-bezier(.2, .8, .2, 1) .1s forwards;
+}
+.dx-line.b { margin: 20px 0 0; animation-delay: 1.5s; }
+@keyframes dx-line-open { to { transform: scaleX(1); } }
+
+.dx-title {
+  margin: 0; line-height: 1; font-weight: 800; font-size: clamp(56px, 15vw, 150px); letter-spacing: .14em; padding-left: .14em;
+  position: relative;
+}
+.dx-ch {
+  display: inline-block; opacity: 0;
+  background: linear-gradient(110deg, #ffffff 0%, #ffffff 40%, #f3d27a 50%, #ffffff 60%, #ffffff 100%);
+  background-size: 300% 100%; background-position: 100% 0;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 0 30px rgba(255, 255, 255, .12);
+  animation: dx-rise .9s cubic-bezier(.2, .9, .25, 1.15) forwards, dx-shine 1.4s ease 2.1s forwards;
+}
+@keyframes dx-rise {
+  0% { opacity: 0; transform: translateY(60%) scale(.85); filter: blur(12px); }
+  100% { opacity: 1; transform: none; filter: blur(0); }
+}
+@keyframes dx-shine { to { background-position: 0 0; } }
+
+.dx-powered { margin-top: 34px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.dx-pw-small {
+  font-size: clamp(11px, 2.6vw, 15px); font-weight: 600; letter-spacing: .55em; padding-left: .55em; color: #9aa7b2;
+  opacity: 0; animation: dx-fade-up .8s ease 2.9s forwards;
+}
+@keyframes dx-fade-up { from { opacity: 0; transform: translateY(10px); letter-spacing: .9em; } to { opacity: 1; transform: none; } }
+.dx-pw-name {
+  font-size: clamp(22px, 6vw, 44px); font-weight: 800; letter-spacing: .22em; padding-left: .22em;
+  perspective: 600px; display: inline-flex;
+}
+.dx-pw-ch {
+  display: inline-block; opacity: 0; color: #fff; transform-origin: 50% 100%;
+  text-shadow: 0 0 14px rgba(32, 201, 180, .85), 0 0 34px rgba(32, 201, 180, .45);
+  animation: dx-flip .7s cubic-bezier(.2, .9, .3, 1.2) forwards;
+}
+@keyframes dx-flip {
+  0% { opacity: 0; transform: rotateX(-95deg) translateY(10px); }
+  100% { opacity: 1; transform: none; }
+}
+.dx-gap { display: inline-block; width: .5em; }
+
+.dx-skip {
+  position: absolute; bottom: 18px; right: 20px; font-size: 12px; letter-spacing: .1em; color: rgba(255,255,255,.35);
+  opacity: 0; animation: dx-glow-in .6s ease 1s forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dx-intro *, .dx-intro { animation-duration: .01ms !important; animation-delay: 0ms !important; }
+}
+@media print { .dx-intro { display: none !important; } }
+`;
+
 export default function IntroSplash() {
   const [state, setState] = useState('play'); // play | out | gone
   const [run, setRun] = useState(0);           // changes on replay so every CSS animation starts again
-  const [phase, setPhase] = useState('scene'); // scene | cam | brand
   const timers = useRef([]);
   const leaving = useRef(false);
 
   const clear = () => { timers.current.forEach(clearTimeout); timers.current = []; };
-
-  const schedule = () => {
-    timers.current.push(
-      setTimeout(() => setPhase('cam'), CAM_AT),
-      setTimeout(() => setPhase('brand'), BRAND_AT),
-      setTimeout(leave, OUT_AT),
-    );
-  };
 
   const leave = () => {
     if (leaving.current) return;
@@ -64,12 +145,14 @@ export default function IntroSplash() {
     clear();
     const root = document.documentElement;
     setState('out');
-    root.classList.remove('intro-playing');   // page underneath comes forward while the splash fades
+    root.classList.remove('intro-playing');   // page underneath comes forward while the intro fades
     timers.current.push(setTimeout(() => {
       root.classList.add('intro-done');
       setState('gone');
     }, OUT_MS));
   };
+
+  const schedule = () => { timers.current.push(setTimeout(leave, OUT_AT)); };
 
   const start = () => {
     clear();
@@ -79,7 +162,6 @@ export default function IntroSplash() {
     root.classList.add('intro-playing');
     setRun((r) => r + 1);
     setState('play');
-    setPhase('scene');
     schedule();
   };
 
@@ -90,7 +172,6 @@ export default function IntroSplash() {
       root.classList.add('intro-playing');
       schedule();
     }
-
     const onKey = () => { if (!leaving.current && root.classList.contains('intro-playing')) leave(); };
     const onReplay = () => start();
     window.addEventListener('keydown', onKey);
@@ -105,52 +186,32 @@ export default function IntroSplash() {
 
   if (state === 'gone') return null;
 
-  const camUp = phase !== 'scene';
-
   return (
-    <div
-      key={run}
-      className={`intro-splash story v3 ph-${phase}${camUp ? ' cam-up' : ''}${state === 'out' ? ' is-out' : ''}`}
-      role="presentation"
-      onClick={leave}
-    >
-      <IntroSky />
-      <IntroScene />
+    <div key={run} className={`dx-intro${state === 'out' ? ' is-out' : ''}`} role="presentation" onClick={leave}>
+      <style dangerouslySetInnerHTML={{ __html: CSS }} />
+      <span className="dx-glow" aria-hidden="true" />
+      {SPARKS.map((s, i) => (
+        <span key={i} className="dx-spark" aria-hidden="true" style={{
+          left: `${s.left}%`, top: `${s.top}%`, width: s.size, height: s.size,
+          animationDelay: `${s.delay}ms`, animationDuration: `${s.dur}ms`
+        }} />
+      ))}
+      <span className="dx-vignette" aria-hidden="true" />
 
-      {phase === 'brand' && (<>
-        <div className="is-center">
-          <div className="is-logo-wrap">
-            <span className="is-halo" aria-hidden="true" />
-            <span className="is-logo-card">
-              <span className="is-logo" role="img" aria-label="Daftar">
-                <img className="is-lg-base" src="/brand-base.png" alt="" />
-                <img className="is-lg-arrow" src="/brand-arrow.png" alt="" />
-                <span className="is-logo-shine" aria-hidden="true" />
-              </span>
-            </span>
-          </div>
+      <div className="dx-center">
+        <span className="dx-line" aria-hidden="true" />
+        <h1 className="dx-title" aria-label="DAFTAR">
+          <Letters text="DAFTAR" start={500} step={110} charClass="dx-ch" shineAt={2100} />
+        </h1>
+        <span className="dx-line b" aria-hidden="true" />
 
-          <h1 className="is-title" aria-label="Daftar">
-            <Letters text="DAFTAR" start={1450} step={55} glint={2750} className="is-title-in" />
-          </h1>
-
-          <div className="is-sub" aria-label="Office Systems">
-            <span className="is-line l" aria-hidden="true" />
-            <span className="is-sub-text" aria-hidden="true">OFFICE SYSTEMS</span>
-            <span className="is-line r" aria-hidden="true" />
-          </div>
-
-          <div className="is-powered" aria-label="Powered by KS TECH LLC">
-            <span className="is-pw-small">Powered by</span>
-            <Letters text="KS TECH LLC" start={4900} step={60} className="is-pw-name" />
-            <span className="is-pw-glow" aria-hidden="true" />
-          </div>
+        <div className="dx-powered" aria-label="POWERED BY KS TECH LLC">
+          <span className="dx-pw-small" aria-hidden="true">POWERED BY</span>
+          <Letters text="KS TECH LLC" start={3500} step={85} className="dx-pw-name" charClass="dx-pw-ch" />
         </div>
+      </div>
 
-        <IntroCrowd />
-      </>)}
-
-      <span className="is-skip" aria-hidden="true">Tap to skip</span>
+      <span className="dx-skip" aria-hidden="true">Tap to skip</span>
     </div>
   );
 }
