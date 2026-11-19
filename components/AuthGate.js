@@ -65,7 +65,10 @@ function readUser(session) {
   const role = u.app_metadata?.role || 'viewer';
   const name = u.user_metadata?.display_name || (u.email || '').split('@')[0];
   // isSelf = made his own login on /signup (19 Nov 2026): sees only his own companies
-  return { id: u.id, username: (u.email || '').split('@')[0], name, isSelf: u.app_metadata?.self === true, ...roleFlags(role) };
+  const isSelf = u.app_metadata?.self === true;
+  const owner = isSelf ? u.app_metadata?.owner || '' : ''; // team user: made by this company owner
+  const cadmin = isSelf && u.app_metadata?.cadmin === true; // Company administrator (can manage the team)
+  return { id: u.id, username: (u.email || '').split('@')[0], name, isSelf, owner, cadmin, isCoOwner: isSelf && !owner, isTeamAdmin: isSelf && (!owner || cadmin), ...roleFlags(role) };
 }
 
 /* what an access level may do (also used for the level of one company page, lib/pageAccess.js) */
@@ -219,6 +222,7 @@ export default function AuthGate({ children, adminOnly = false, ownerOnly = fals
   if (user.canRead) quick.push(['/alerts', 'Alerts', 'bell']); // 🔔 Alerts (19 Nov 2026): Android / iOS only (CSS .mob-only), before Admin; replaces the alarm clock there
   if (user.isOwner) quick.push(['/admin', 'Admin', 'shield']); // company buttons moved to All Companies (9 Nov 2026)
   if (user.isSelf) quick.length = 0; // 🙋 signed up user: Home only, his companies are on Home
+  if (user.isTeamAdmin && COMPANIES.length) quick.push(['/team', 'Users', 'users']); // 👥 owner makes logins for his companies
 
   let blocked = '';
   if (ownerOnly && !user.isOwner) blocked = 'Only Administrator can open this page.';
@@ -271,7 +275,7 @@ export default function AuthGate({ children, adminOnly = false, ownerOnly = fals
       {!user.isEntry && (
         <div className="who-bar no-print" role="status">
           <span className="who-av" aria-hidden="true">{(user.name || '?').charAt(0).toUpperCase()}</span>
-          <span>Logged in as <b>{user.name ? user.name.charAt(0).toUpperCase() + user.name.slice(1) : user.username}</b> · {user.isSelf ? 'Company owner' : ROLES[user.role]?.label || user.role}</span>
+          <span>Logged in as <b>{user.name ? user.name.charAt(0).toUpperCase() + user.name.slice(1) : user.username}</b> · {user.isCoOwner ? 'Company owner' : user.cadmin ? 'Company administrator' : ROLES[user.role]?.label || user.role}</span>
         </div>
       )}
       {/* Driver login: who is logged in + Logout, always visible (so the office can leave a driver login while testing) */}

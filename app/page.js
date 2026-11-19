@@ -121,7 +121,8 @@ function SelfHome() {
         <h1 className="center">Daftar Office System</h1>
         <span className="home-rule" aria-hidden="true"><i /></span>
       </div>
-      {mine.length === 0 && (
+      {mine.length === 0 && !user.isCoOwner && <p className="empty">No company is given to you yet. Ask your company owner.</p>}
+      {mine.length === 0 && user.isCoOwner && (
         <div className="self-start">
           <p className="self-hi">Welcome{first ? `, ${first.charAt(0).toUpperCase()}${first.slice(1)}` : ''}. Start by adding your company.</p>
           <Link href="/add-company" className="self-add big">
@@ -152,7 +153,13 @@ function SelfHome() {
           )}
         </section>
       ))}
-      {mine.length > 0 && (
+      {mine.length > 0 && user.isTeamAdmin && (
+        <Link href="/team" className="self-add">
+          <span className="self-plus" aria-hidden="true">👥</span>
+          <span><b>Users</b><small>Make logins for your staff: Manager, Accountant, HR Manager ... and choose what each can do.</small></span>
+        </Link>
+      )}
+      {mine.length > 0 && user.isCoOwner && (
         <Link href="/add-company" className="self-add">
           <span className="self-plus" aria-hidden="true">＋</span>
           <span><b>Add another company</b><small>Each company has its own bills, salary, employees and inventory.</small></span>

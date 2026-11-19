@@ -15,6 +15,11 @@ const LEGAL = ['LLC (Limited Liability Company)', 'SPC (Sole Partner Company)', 
 
 function AddCompanyForm() {
   const user = useUser();
+  if (user.isSelf && !user.isCoOwner) return <p className="empty">Only the company owner can add a company.</p>;
+  return <AddCompanyInner user={user} />;
+}
+
+function AddCompanyInner({ user }) {
   const [f, setF] = useState({
     owner_name: user.name ? user.name.charAt(0).toUpperCase() + user.name.slice(1) : '', owner_id_no: '', owner_nationality: '', owner_phone: '',
     name: '', name_ar: '', short: '', legal_type: LEGAL[0], cr: '', cr_expiry: '', vat_no: '', activity: '', phone: '', email: '', address: ''

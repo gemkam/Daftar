@@ -5172,3 +5172,12 @@ html.mobile-os .tbx-nav a.mob-only { display: flex !important; }
 .ac-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 .login-alt { margin: 14px 0 0; text-align: center; font-size: 14px; }
 .login-alt a { color: var(--heading); font-weight: 600; }
+/* 👥 Users of my company (19 Nov 2026) */
+.tm-levels { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.tm-level { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; background: var(--surface); }
+.tm-level.on { border-color: var(--brown); background: var(--tint); }
+.tm-level b { display: block; font-size: 14px; color: var(--heading); }
+.tm-level small { display: block; font-size: 12px; color: var(--muted); }
+.tm-cos { display: flex; flex-wrap: wrap; gap: 8px; }
+.tm-co { display: inline-flex; gap: 6px; align-items: center; padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; background: var(--surface); }
+.tm-co.on { border-color: var(--brown); background: var(--tint); }
