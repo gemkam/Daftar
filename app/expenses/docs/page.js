@@ -1,0 +1,1290 @@
+'use client';
+
+import { useMyCompanies, useCompanyChoices } from '@/lib/myCompanies';
+import CloseEdit from '@/components/CloseEdit';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useCompanyGate, CompanyPicker } from '@/components/CompanyGate';
+import AuthGate, { useUser } from '@/components/AuthGate';
+import Modal from '@/components/Modal';
+import DateInput from '@/components/DateInput';
+import Omr, { fmt3 } from '@/components/Omr';
+import { sb } from '@/lib/supabase';
+import { todayISO, fmtFullDate } from '@/lib/sheet';
+import { omrInWords } from '@/lib/words';
+import DocImport from '@/components/DocImport';
+import EditToggle from '@/components/EditToggle';
+import ColumnPicker from '@/components/ColumnPicker';
+import PaperPreview from '@/components/PaperPreview';
+import { shortOf, hasShort, FUELS } from '@/lib/docShort';
+import { lockEdit, requestEditPassword } from '@/lib/editLock';
+import DocFiles from '@/components/DocFiles';
+import BillVerify, { readBillPaper, isApproved } from '@/components/BillVerify';
+import { canVerifyBill } from '@/lib/chairmen';
+import { checkBill, aiOn, billFig } from '@/lib/billCheck';
+import DeptPicker from '@/components/DeptPicker';
+import { addDept } from '@/lib/departments';
+import BillColumns from '@/components/BillColumns';
+import { printTable } from '@/components/CustomPrint';
+import { useBillColumns, saveBillCols } from '@/lib/billColumns';
+import { COMPANIES, companyOf, DEPARTMENTS, HEADS, CATEGORIES, PAY_METHODS, n, r3 } from '@/lib/expenses';
+import { sellerFor, loadSellers, SHOW_GOVT_QR, viewUrl, isEinvoice, newUuid, qrText, ublXml, downloadText, paperPdf, issueISO, buyerType, totalsOf } from '@/lib/einvoice';
+import SignStamp from '@/components/SignStamp';
+import AliPackPaper, { AP_LH, apLh } from '@/components/AliPackPaper';
+import { useShare } from '@/components/ShareModal';
+
+/*
+  Simple invoice and payment receipt for the 3 companies (Al Noor, Sahil).
+  Table company_docs. A saved PAYMENT RECEIPT is added to that company's expenses (All Companies) by a DB trigger
+  (sync_transport_exp): change or delete the receipt and the expense line follows.
+*/
+
+/* Bills (kind 'receipt', our purchases) FIRST, Invoices (our sales) second. "Payment receipts" renamed "Bills" 4 Nov 2026.
+   DB value stays 'receipt' and numbers stay PR-.. so saved bills are not changed. */
+const KINDS = {
+  receipt: { label: 'Bills', one: 'Bill', title: 'BILL', prefix: 'PR', party: 'Paid to', partyPh: 'Name of person or company paid' },
+  invoice: { label: 'Invoices', one: 'Invoice', title: 'INVOICE', prefix: 'INV', party: 'Bill to', partyPh: 'Client name' }
+};
+const CO_CODE = { 'al-noor': 'AN', sahil: 'SH', 'ali-pack': 'AP' };
+/* 🦁 Ali Pack invoices follow its own series from the Excel (Sales Ledger INV-110001, INV-110002 ...) */
+const isAP = (co, kind) => co === 'ali-pack' && kind === 'invoice';
+const apNext = (max) => (max ? `INV-${max + 1}` : 'INV-110001');
+const fmtD = (d) => (d ? fmtFullDate(d) : '');
+const lineTotal = (items) => r3((items || []).reduce((t, i) => t + n(i.amount), 0));
+const blankItems = () => [{ desc: '', amount: '' }, { desc: '', amount: '' }, { desc: '', amount: '' }];
+
+/* One bill typed right in the Bills table (no paper page). Columns follow the list: No., Date, Paid to, Receipt No.,
+   Vehicle No., Fuel, Subtotal, VAT 5%, Grand Total, VAT No., Department. Subtotal + VAT 5% = Grand Total (Owner 4 Nov 2026):
+   change any one of the three and the others follow.
+   Type-ahead (Owner 4 Nov 2026): Paid to, Vehicle No. and VAT No. finish the word from earlier bills as you type
+   (Tab or Enter keeps it, keep typing to change it). Picking a saved "Paid to" fills its VAT No., a saved VAT No. fills "Paid to". */
+function finish(e, options, set, k) {
+  const el = e.target;
+  const typed = el.value;
+  const adding = String(e.nativeEvent?.inputType || '').startsWith('insert');
+  const atEnd = el.selectionStart === typed.length;
+  const low = typed.toLowerCase();
+  const hit = adding && atEnd && typed.trim() ? (options || []).find((o) => o.toLowerCase().startsWith(low) && o.length > typed.length) : null;
+  if (!hit) { set(k, typed); return; }
+  const full = typed + hit.slice(typed.length);
+  set(k, full);
+  requestAnimationFrame(() => { try { el.setSelectionRange(typed.length, full.length); } catch { /* ignore */ } });
+}
+
+function BillRow({ f, set, canPick, co, saving, onSave, onCancel, sugg = {}, picked = false, onPick = null, paper = null, verify = null, pending = false, status = '', onLeave = null, xcols = [] }) {
+  const stop = (e) => e.stopPropagation();
+  const pickRef = useRef(null);
+  const key = (e) => {
+    const el = e.target;
+    const sel = el && typeof el.selectionStart === 'number' && el.selectionEnd > el.selectionStart && el.selectionEnd === String(el.value || '').length;
+    if (e.key === 'Enter' && sel) { e.preventDefault(); el.setSelectionRange(el.value.length, el.value.length); return; } // keep the finished word
+    if (e.key === 'Enter') { e.preventDefault(); onSave(); }
+    if (e.key === 'Escape') onCancel();
+  };
+  const tot = n(f.amount);
+  const sub = n(f.sub);
+  const f3 = (v) => r3(v).toFixed(3);
+  const num = (v) => String(v).replace(/[^\d.]/g, '');
+  // Owner 4 Nov 2026: type Subtotal -> VAT 5% added, Grand Total written. Type Grand Total -> VAT 5% taken out, Subtotal written.
+  // Typing VAT by hand (e.g. 0 for a bill with no VAT) keeps the Subtotal and changes the Grand Total.
+  const onSub = (v) => { v = num(v); set('sub', v); if (v === '') return; const vt = r3(n(v) * 0.05); set('vat', f3(vt)); set('amount', f3(n(v) + vt)); };
+  const onVat = (v) => {
+    v = num(v); set('vat', v);
+    if (f.sub !== '' && f.sub !== undefined) set('amount', f3(sub + n(v)));
+    else if (tot > 0) set('sub', f3(tot - n(v)));
+  };
+  const onGrand = (v) => { v = num(v); set('amount', v); if (v === '') return; const vt = r3(n(v) - n(v) / 1.05); set('vat', f3(vt)); set('sub', f3(n(v) - vt)); };
+  const fillVat = () => {
+    if (sub > 0) { const vt = r3(sub * 0.05); set('vat', f3(vt)); set('amount', f3(sub + vt)); return; }
+    if (tot > 0) { const vt = r3(tot - tot / 1.05); set('vat', f3(vt)); set('sub', f3(tot - vt)); }
+  };
+  const money = (k, ph, fn) => (
+    <input className="br-in" value={f[k] ?? ''} placeholder={ph} inputMode="decimal" style={{ textAlign: 'right' }} autoComplete="off" onKeyDown={key}
+      onChange={(e) => fn(e.target.value)} onBlur={(e) => e.target.value !== '' && set(k, f3(n(e.target.value)))} />
+  );
+  const auto = sugg.auto || {};
+  const inp = (k, ph, extra = {}) => (
+    <input className="br-in" value={f[k]} placeholder={ph} onKeyDown={key} autoComplete="off" {...extra}
+      onChange={(e) => (auto[k] ? finish(e, auto[k], set, k) : set(k, e.target.value))} />
+  );
+  return (
+    <tr data-id={f.id || undefined} className={`br-row${pending ? ' bv-pend' : ''}${picked ? ' dx-on' : ''}${status === 'dirty' ? ' br-dirty' : ''}${status === 'err' ? ' br-errrow' : ''}`} onClick={stop}
+      onBlur={(e) => { if (onLeave && !e.currentTarget.contains(e.relatedTarget)) onLeave(); }}>
+      {canPick && <td className="dx-c">{onPick && <input type="checkbox" aria-label={`Select ${f.doc_no}`} checked={picked} onChange={onPick} />}</td>}
+      {paper ? <td className="bv-keep" onClick={stop}>{paper}</td> : <td className="br-paper bv-keep">
+        {f.oldFiles > 0 && <span className="muted br-has">📎 {f.oldFiles} saved</span>}
+        {(f.newFiles || []).map((x, i) => (
+          <span key={i} className="br-file" title={x.name}>📄 {x.name.length > 18 ? `${x.name.slice(0, 16)}…` : x.name}
+            <button type="button" aria-label={`Remove ${x.name}`} onClick={() => set('newFiles', f.newFiles.filter((_, j) => j !== i))}>×</button></span>
+        ))}
+        <input ref={pickRef} type="file" accept="image/*,application/pdf" multiple hidden
+          onChange={(e) => { const add = [...(e.target.files || [])]; e.target.value = ''; if (add.length) set('newFiles', [...(f.newFiles || []), ...add]); }} />
+        <button type="button" className="btn small ghost" onClick={() => pickRef.current?.click()} disabled={saving}>＋ Add paper</button>
+      </td>}
+      <td className="bv-keep" onClick={stop}>{verify || <span className="muted">After save</span>}</td>
+      <td className="iv-list-no">{f.doc_no}</td>
+      <td><DateInput className="br-in" value={f.doc_date || ''} onChange={(v) => set('doc_date', v)} /></td>
+      <td>{inp('party', 'Paid to', { autoFocus: !f.id, list: 'br-party' })}</td>
+      <td>{inp('receipt_no', 'Receipt No.')}</td>
+      <td>{inp('vehicle_no', 'Vehicle No.', { list: 'br-veh' })}</td>
+      <td><select className="br-in" value={f.fuel} onChange={(e) => set('fuel', e.target.value)}><option value="">Not fuel</option>{FUELS.map((x) => <option key={x} value={x}>{x}</option>)}</select></td>
+      <td className="num">{money('sub', 'Without VAT', onSub)}</td>
+      <td className="num">
+        <div className="br-vat">{money('vat', '0.000', onVat)}
+          <button type="button" className="btn small ghost" title="VAT 5%: of the Subtotal, or inside the Grand Total" onClick={fillVat} disabled={!(sub > 0 || tot > 0)}>5%</button></div>
+      </td>
+      <td className="num">{money('amount', 'With VAT', onGrand)}</td>
+      <td>{inp('vat_no', 'VAT No.', { list: 'br-vatno' })}</td>
+      <td><DeptPicker co={co} value={f.department} onChange={(v) => set('department', v)} disabled={saving} /></td>
+      {xcols.map((c) => (
+        <td key={c.key}><input className="br-in" value={(f.extra || {})[c.key] ?? ''} placeholder={c.name} onKeyDown={key} autoComplete="off"
+          onChange={(e) => set('extra', { ...(f.extra || {}), [c.key]: e.target.value })} /></td>
+      ))}
+      <td style={{ whiteSpace: 'nowrap' }}>
+        {!f.id ? (<>
+          <button type="button" className="btn small" onClick={onSave} disabled={saving}>{saving ? 'Saving...' : '✓ Save'}</button>{' '}
+          <button type="button" className="btn small ghost" onClick={onCancel} disabled={saving}>✕</button>
+        </>) : (
+          <span className={`br-st st-${status || 'idle'}`}>{status === 'saving' ? 'Saving...' : status === 'saved' ? '✓ Saved' : status === 'dirty' ? '● Not saved' : status === 'err' ? '⚠ Not saved' : ''}</span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function DocsPage() {
+  const U = useUser();
+  const myCos = useMyCompanies(U);
+  const coChoices = useCompanyChoices(U);
+  const { isAdmin, isOwner, name: me } = U;
+  const [co, setCo] = useState(null);
+  const gate = useCompanyGate(co);
+  const [kind, setKind] = useState('receipt');
+  const [list, setList] = useState(null);
+  const [doc, setDoc] = useState(null); // open document (editor)
+  // 🧾 Govt e-invoice (Al Noor invoices, 9 Nov 2026): QR picture, paper for PDF, share
+  const [qrUrl, setQrUrl] = useState('');
+  const [viewQr, setViewQr] = useState('');
+  const [sharing, setSharing] = useState(false);
+  const paperRef = useRef(null);
+  const { open: openShare, modal: shareModal } = useShare();
+  const [, setSellersReady] = useState(0);
+  useEffect(() => { loadSellers().then(() => setSellersReady((x) => x + 1)); }, []);
+  useEffect(() => {
+    if (!doc || !isEinvoice(co, kind) || !doc.einv?.uuid) { setQrUrl(''); setViewQr(''); return; }
+    let live = true;
+    import('qrcode').then(async (Q) => {
+      const v = await Q.toDataURL(viewUrl(doc.einv.uuid), { margin: 1, width: 220, errorCorrectionLevel: 'M' });
+      const g = SHOW_GOVT_QR ? await Q.toDataURL(qrText(co, doc), { margin: 1, width: 220, errorCorrectionLevel: 'M' }) : '';
+      if (live) { setViewQr(v); setQrUrl(g); }
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [doc, co, kind]);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [del, setDel] = useState(false);
+  const [q, setQ] = useState('');
+  const [toast, setToast] = useState(null);
+  const [editing, setEditing] = useState(false); // ✏️ Edit (password 728300) -> Add, Delete, Move
+  const [picked, setPicked] = useState([]); // selected ids in Edit
+  const [bulk, setBulk] = useState(null); // { act: 'delete' | 'move', to }
+  const [busy, setBusy] = useState(false);
+  const [row, setRow] = useState(null); // Bills: row typed in the table { id|null, ...fields } (no paper page)
+  const [rowSaving, setRowSaving] = useState(false);
+  const [undo, setUndo] = useState([]); // ↶ Undo steps this visit: [{ label, run }] newest last, up to 30
+  const trash = useRef(new Set()); // papers of deleted docs: kept until ✓ Done so Undo can bring them back
+  const timer = useRef(null);
+
+  const flash = useCallback((text, k = 'ok') => {
+    setToast({ text, kind: k });
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setToast(null), 2600);
+  }, []);
+
+  useEffect(() => {
+    let c = ''; let k = '';
+    try {
+      const p = new URLSearchParams(window.location.search);
+      c = p.get('co') || ''; // 9 Nov 2026: no company opens by itself (company buttons + password)
+      k = p.get('kind') || '';
+    } catch { /* ignore */ }
+    setCo(COMPANIES.some((x) => x.key === c) ? c : '');
+    if (KINDS[k]) setKind(k);
+  }, []);
+
+  useEffect(() => {
+    if (!co) return;
+    try { window.history.replaceState(null, '', `/expenses/docs?co=${co}&kind=${kind}`); localStorage.setItem('tudo-exp-co', co); } catch { /* ignore */ }
+  }, [co, kind]);
+
+  const load = useCallback(async () => {
+    if (!co) return;
+    const { data, error } = await sb().from('company_docs').select('*').eq('company', co).eq('kind', kind)
+      .order('doc_date', { ascending: false }).order('created_at', { ascending: false });
+    if (error) { flash(error.message, 'err'); setList([]); return; }
+    setList(data || []);
+  }, [co, kind, flash]);
+  useEffect(() => { setList(null); setPicked([]); setRow(null); load(); }, [load]);
+
+  const C = companyOf(co);
+  const K = KINDS[kind];
+  const canEdit = isAdmin && editing;
+
+  /* Choices from earlier documents (pick or type) */
+  const parties = useMemo(() => [...new Set((list || []).map((d) => d.party).filter(Boolean))], [list]);
+  const partyInfo = useMemo(() => {
+    const m = {};
+    for (const d of list || []) if (d.party && !m[d.party]) m[d.party] = { party_details: d.party_details || '', party_vat: d.party_vat || '' };
+    return m;
+  }, [list]);
+
+  function nextNo() {
+    const pre = `${K.prefix}-${CO_CODE[co] || 'X'}-`;
+    const max = (list || []).reduce((mx, d) => {
+      const m = String(d.doc_no || '').match(/(\d+)\s*$/);
+      return m ? Math.max(mx, Number(m[1])) : mx;
+    }, 0);
+    if (isAP(co, kind)) return apNext(max);
+    return `${pre}${String(max + 1).padStart(4, '0')}`;
+  }
+
+  /* next number for the import (any kind); read fresh each time, so numbers follow on during one import */
+  async function nextNoFor(k) {
+    const pre = `${KINDS[k].prefix}-${CO_CODE[co] || 'X'}-`;
+    const { data } = await sb().from('company_docs').select('doc_no').eq('company', co).eq('kind', k);
+    const max = (data || []).reduce((mx, d) => {
+      const m = String(d.doc_no || '').match(/(\d+)\s*$/);
+      return m ? Math.max(mx, Number(m[1])) : mx;
+    }, 0);
+    if (isAP(co, k)) return apNext(max);
+    return `${pre}${String(max + 1).padStart(4, '0')}`;
+  }
+
+  function newDoc() {
+    const last = (list || [])[0];
+    setDoc({
+      id: null, company: co, kind, doc_no: nextNo(), doc_date: todayISO(), party: '', party_details: '', party_vat: '',
+      items: blankItems(), vat_pct: kind === 'invoice' ? (isAP(co, kind) && !last ? 5 : n(last?.vat_pct)) : 0, // Ali Pack Excel: VAT @ 5%
+      discount: '', signs: null, lh: isAP(co, kind) ? { ...AP_LH, ...(last?.lh || {}) } : null, // Ali Pack: letterhead texts of the last invoice
+      payment_method: kind === 'receipt' ? (last?.payment_method || 'Cash') : '',
+      department: kind === 'receipt' ? (last?.department || (DEPARTMENTS[co] || [])[0] || '') : '',
+      head: kind === 'receipt' ? (last?.head || 'Office Expenses') : '', category: '',
+      notes: '', signatory: last?.signatory || ''
+    });
+    setDirty(true);
+  }
+
+  function openDoc(d) {
+    const items = Array.isArray(d.items) && d.items.length ? d.items.map((i) => ({ desc: i.desc || '', amount: i.amount ?? '', qty: i.qty ?? '', price: i.price ?? '' })) : blankItems();
+    setDoc({ ...d, items });
+    setDirty(false);
+  }
+
+  function closeDoc() {
+    if (dirty && canEdit && !window.confirm('Close without saving?')) return;
+    setDoc(null); setDirty(false);
+  }
+
+  const set = (k, v) => { setDoc((d) => ({ ...d, [k]: v })); setDirty(true); };
+  const setItem = (i, k, v) => {
+    setDoc((d) => ({ ...d, items: d.items.map((x, j) => {
+      if (j !== i) return x;
+      const y = { ...x, [k]: v };
+      // e-invoice lines: Qty x Unit price = Amount
+      if ((k === 'qty' || k === 'price') && y.qty !== '' && y.price !== '' && y.qty !== undefined && y.price !== undefined) y.amount = r3(n(y.qty) * n(y.price)).toFixed(3);
+      return y;
+    }) }));
+    setDirty(true);
+  };
+  const addItem = () => { setDoc((d) => ({ ...d, items: [...d.items, { desc: '', amount: '' }] })); setDirty(true); };
+  const removeItem = (i) => { setDoc((d) => ({ ...d, items: d.items.length > 1 ? d.items.filter((_, j) => j !== i) : [{ desc: '', amount: '' }] })); setDirty(true); };
+
+  function pickParty(v) {
+    setDoc((d) => {
+      const info = partyInfo[v];
+      return info && !d.party_details ? { ...d, party: v, ...info } : { ...d, party: v };
+    });
+    setDirty(true);
+  }
+
+  async function saveDoc() {
+    if (!doc.party?.trim()) { flash(`Please fill "${K.party}".`, 'err'); return; }
+    const items = doc.items
+      .map((i) => {
+        const x = { desc: String(i.desc || '').trim(), amount: i.amount === '' || i.amount === null ? '' : r3(i.amount) };
+        if (isEinvoice(co, kind)) { if (i.qty !== '' && i.qty !== undefined) x.qty = n(i.qty); if (i.price !== '' && i.price !== undefined) x.price = r3(i.price); }
+        return x;
+      })
+      .filter((i) => i.desc || i.amount !== '');
+    if (!items.length) { flash('Add at least one line with an amount.', 'err'); return; }
+    setSaving(true);
+    const row = {
+      company: co, kind, doc_no: doc.doc_no || null, doc_date: doc.doc_date || todayISO(), party: doc.party.trim(),
+      party_details: doc.party_details || null, party_vat: doc.party_vat || null, items, vat_pct: n(doc.vat_pct),
+      payment_method: doc.payment_method || null, department: doc.department || null, head: doc.head || null, category: doc.category || null,
+      notes: doc.notes || null, signatory: doc.signatory || null, updated_at: new Date().toISOString(),
+      // ✍ stamp / signature (upload or draw) on invoices; 🦁 Ali Pack: discount and letterhead texts
+      signs: kind === 'invoice' && (doc.signs?.stamp || doc.signs?.sign) ? { stamp: doc.signs.stamp || null, sign: doc.signs.sign || null } : null,
+      discount: kind === 'invoice' ? r3(doc.discount) : 0,
+      lh: isAP(co, kind) ? apLh(doc) : (doc.lh || null)
+    };
+    if (doc.scan) row.scan = doc.scan;
+    // 🧾 Govt e-invoice: UUID and time of issue made once, kept for ever
+    if (isEinvoice(co, kind)) row.einv = { ...(doc.einv || {}), seller: doc.einv?.seller || (({ key, logo, ...x }) => ({ ...x, logo }))(sellerFor(co, null)), uuid: doc.einv?.uuid || newUuid(), issued_at: doc.einv?.issued_at || new Date().toISOString(), type: '388', buyer_type: buyerType(doc), standard: 'Fawtara PINT-OM (ready)' };
+    const s = sb().from('company_docs');
+    const before = doc.id ? (list || []).find((d) => d.id === doc.id) : null;
+    const res = doc.id
+      ? await s.update(row).eq('id', doc.id).select().single()
+      : await s.insert({ ...row, created_by: me || null }).select().single();
+    setSaving(false);
+    if (res.error) { flash(res.error.code === '42501' ? 'You need Full access to save.' : res.error.message, 'err'); return; }
+    if (kind === 'receipt' && row.department) addDept(co, row.department);
+    setDoc({ ...res.data, items: res.data.items.length ? res.data.items : blankItems() });
+    setDirty(false);
+    const saved = res.data;
+    // papers picked in the row: upload now that the bill has its id
+    const added = [];
+    for (const file of f.newFiles || []) {
+      if (file.size > 15 * 1024 * 1024) { flash(`${file.name} is bigger than 15 MB, not added.`, 'err'); continue; }
+      const path = `company_docs/${saved.id}/${Date.now()}-${String(file.name).replace(/[^\w.\-]+/g, '_')}`;
+      const up = await sb().storage.from('doc-files').upload(path, file, { contentType: file.type || undefined, upsert: false });
+      if (up.error) { flash(`Upload failed: ${up.error.message}`, 'err'); continue; }
+      added.push({ path, name: file.name, size: file.size, type: file.type || '', at: new Date().toISOString(), by: me || '' });
+    }
+    if (added.length) {
+      const { error } = await sb().from('company_docs').update({ files: [...(saved.files || []), ...added] }).eq('id', saved.id);
+      if (error) flash(`Paper uploaded but not linked: ${error.message}`, 'err');
+    }
+    setRowSaving(false);
+    if (before) {
+      const { id, created_at: _c, ...back } = before;
+      pushUndo(`change ${before.doc_no}`, async () => {
+        const { error } = await sb().from('company_docs').update(back).eq('id', id);
+        if (error) throw new Error(error.message);
+        setDoc((d) => (d && d.id === id ? { ...before, items: before.items?.length ? before.items : blankItems() } : d));
+      });
+    } else {
+      pushUndo(`add ${saved.doc_no}`, async () => {
+        const { error } = await sb().from('company_docs').delete().eq('id', saved.id);
+        if (error) throw new Error(error.message);
+        setDoc((d) => (d && d.id === saved.id ? null : d));
+      });
+    }
+    load();
+    flash(kind === 'receipt' ? `Saved. Added to ${C.short} expenses (All Companies).` : 'Saved');
+  }
+
+  /* ---------- Bills: add / change a bill right in the table (Owner 4 Nov 2026: no paper page for bills) ---------- */
+  function billForm(d) {
+    if (!d) {
+      const last = (list || [])[0];
+      return { id: null, doc_no: nextNo(), doc_date: todayISO(), party: '', receipt_no: '', vehicle_no: '', fuel: '', vat_no: '', vat: '', sub: '', amount: '',
+        department: last?.department || (DEPARTMENTS[co] || [])[0] || '', extra: {}, newFiles: [], oldFiles: 0 };
+    }
+    const x = shortOf(d);
+    const fg = billFig(d); // scanned bill: the printed figures as they are
+    return { id: d.id, doc_no: d.doc_no, doc_date: d.doc_date || todayISO(), party: d.party || '', receipt_no: x.receipt_no || '', vehicle_no: x.vehicle_no || '',
+      fuel: x.fuel || '', vat_no: x.vat_no || '', vat: fg.vat > 0 ? fg.vat.toFixed(3) : '', sub: fg.sub === null ? '' : fg.sub.toFixed(3), amount: fg.total.toFixed(3), department: d.department || '', extra: { ...(d.extra || {}) }, newFiles: [], oldFiles: (d.files || []).length };
+  }
+  const startRow = (d) => { if (rowSaving) return; setRow(billForm(d)); };
+  const setR = (k, v) => setRow((f) => ({ ...f, [k]: v }));
+
+  /* Earlier bills of this company: words to finish while typing, and Paid to <-> VAT No. pairs */
+  const sugg = useMemo(() => {
+    const uniq = (arr) => { const seen = new Set(); return arr.filter((x) => { const t = String(x || '').trim(); if (!t || seen.has(t.toLowerCase())) return false; seen.add(t.toLowerCase()); return true; }).map((x) => String(x).trim()); };
+    const rows = (list || []).filter((d) => d.kind === 'receipt');
+    const vatOfParty = {}; const partyOfVat = {};
+    for (const d of rows) { // newest first: keep the latest pair
+      const v = String(shortOf(d).vat_no || d.party_vat || '').trim();
+      const p = String(d.party || '').trim();
+      if (p && v && !vatOfParty[p.toLowerCase()]) vatOfParty[p.toLowerCase()] = v;
+      if (p && v && !partyOfVat[v.toLowerCase()]) partyOfVat[v.toLowerCase()] = p;
+    }
+    return {
+      auto: {
+        party: uniq(rows.map((d) => d.party)),
+        vehicle_no: uniq(rows.map((d) => shortOf(d).vehicle_no)),
+        vat_no: uniq(rows.map((d) => shortOf(d).vat_no || d.party_vat))
+      },
+      vatOfParty, partyOfVat
+    };
+  }, [list]);
+  const autofill = (f, k, v) => {
+    const next = { ...f, [k]: v };
+    const key = String(v || '').trim().toLowerCase();
+    if (k === 'party' && key && sugg.vatOfParty[key] && !String(f.vat_no || '').trim()) next.vat_no = sugg.vatOfParty[key];
+    if (k === 'vat_no' && key && sugg.partyOfVat[key] && !String(f.party || '').trim()) next.party = sugg.partyOfVat[key];
+    return next;
+  };
+  const setBill = (k, v) => setRow((f) => autofill(f, k, v));
+
+  /* Owner 4 Nov 2026: one ✏️ Edit opens EVERY bill for typing (no separate edit per bill).
+     A changed bill saves by itself when you leave its row (or press Enter); Esc puts the row back. */
+  const { cfg: colCfg, cols: xcolsAll, label: colName } = useBillColumns();
+  const xcols = kind === 'receipt' ? xcolsAll : [];
+  const hl = (k, def) => (kind === 'receipt' ? colName(k) : def); // header label
+  const [colsOpen, setColsOpen] = useState(false);
+  // ☑ Columns drop-down: hidden columns per list type, saved on this device
+  const [hideCols, setHideCols] = useState([]);
+  useEffect(() => {
+    try { setHideCols(JSON.parse(localStorage.getItem(`tudo-docs-hide-${kind}`) || '[]')); } catch { setHideCols([]); }
+  }, [kind]);
+  const saveHide = (next) => { setHideCols(next); try { localStorage.setItem(`tudo-docs-hide-${kind}`, JSON.stringify(next)); } catch { /* ignore */ } };
+
+  /* 🖨 Custom print: prints straight away ONLY the rows showing now (the search, plus any ▾ column filter), all columns, A4 landscape */
+  const openCustomPrint = () => {
+    let onScreen = null;
+    try {
+      const trs = [...document.querySelectorAll('table.iv-list tbody tr[data-id]')];
+      if (trs.length) onScreen = trs.filter((t) => !t.classList.contains('tf-hide')).map((t) => t.dataset.id);
+    } catch { /* ignore */ }
+    const cpOpen = onScreen || shown.map((d) => d.id);
+    const f3 = (v) => r3(v).toFixed(3);
+    const columns = [
+      { key: 'no', label: hl('no', 'No.') }, { key: 'date', label: hl('date', 'Date') }, { key: 'party', label: hl('party', K.party) },
+      { key: 'receipt_no', label: hl('receipt_no', 'Receipt No.') }, { key: 'vehicle_no', label: hl('vehicle_no', 'Vehicle No.') }, { key: 'fuel', label: hl('fuel', 'Fuel') },
+      { key: 'sub', label: hl('sub', 'Subtotal'), num: true }, { key: 'vat', label: hl('vat', 'VAT 5%'), num: true }, { key: 'grand', label: hl('grand', 'Grand Total'), num: true },
+      { key: 'vat_no', label: hl('vat_no', 'VAT No.') },
+      ...(kind === 'receipt' ? [{ key: 'department', label: hl('department', 'Department') }] : []),
+      ...xcols.map((c) => ({ key: `x:${c.key}`, label: c.name }))
+    ];
+    const rows = shown.filter((d) => cpOpen.includes(d.id)).map((d) => {
+      const x = shortOf(d); const fg = billFig(d); const sub = fg.sub ?? 0; const tot = fg.total; const vt = fg.vat;
+      const cells = { no: d.doc_no, date: fmtD(d.doc_date), party: d.party, receipt_no: x.receipt_no, vehicle_no: x.vehicle_no, fuel: x.fuel,
+        sub: fg.sub === null ? '' : f3(sub), vat: f3(vt), grand: f3(tot), vat_no: x.vat_no, department: d.department || '' };
+      xcols.forEach((c) => { cells[`x:${c.key}`] = (d.extra || {})[c.key] || ''; });
+      return { id: d.id, label: `${d.doc_no} · ${fmtD(d.doc_date)} · ${d.party || ''} · ${f3(tot)}`, cells, nums: { sub, vat: vt, grand: tot } };
+    });
+    const ok = printTable({ title: `${C.name} · ${K.label}`, subtitle: q ? `Search: ${q}` : 'As shown on screen', columns, rows });
+    if (!ok) flash('Nothing showing to print.', 'err');
+  };
+  const [colBusy, setColBusy] = useState(false);
+  async function changeCols(next, note) {
+    const prev = colCfg;
+    setColBusy(true);
+    const r = await saveBillCols(next);
+    setColBusy(false);
+    if (r.error) { flash(r.error, 'err'); return false; }
+    pushUndo(note, async () => { const x = await saveBillCols(prev); if (x.error) throw new Error(x.error); });
+    flash(`Column change saved: ${note}`);
+    return true;
+  }
+  const [forms, setForms] = useState({}); // id -> form being typed
+  const formsRef = useRef({});
+  const [rowSt, setRowSt] = useState({}); // id -> 'saving' | 'saved' | 'err'
+  const savingIds = useRef(new Set());
+  const updForms = (fn) => setForms((m) => { const nx = fn(m); formsRef.current = nx; return nx; });
+  const FORM_KEYS = ['doc_date', 'party', 'receipt_no', 'vehicle_no', 'fuel', 'vat_no', 'vat', 'sub', 'amount', 'department'];
+  const num3 = (v) => (v === '' || v === null || v === undefined ? '' : r3(v).toFixed(3));
+  const isDirty = (f, d) => {
+    const o = billForm(d);
+    return FORM_KEYS.some((k) => (['vat', 'sub', 'amount'].includes(k) ? num3(f[k]) !== num3(o[k]) : String(f[k] ?? '').trim() !== String(o[k] ?? '').trim()))
+      || xcols.some((c) => String((f.extra || {})[c.key] ?? '').trim() !== String((o.extra || {})[c.key] ?? '').trim());
+  };
+  const setBillFor = (d) => (k, v) => {
+    updForms((m) => ({ ...m, [d.id]: autofill(m[d.id] || billForm(d), k, v) }));
+    setRowSt((st) => (st[d.id] && st[d.id] !== 'saving' ? { ...st, [d.id]: '' } : st));
+  };
+  const revertRow = (d) => { updForms((m) => { const nx = { ...m }; delete nx[d.id]; return nx; }); setRowSt((st) => ({ ...st, [d.id]: '' })); };
+  async function leaveRow(d) {
+    const f = formsRef.current[d.id];
+    if (!f || savingIds.current.has(d.id) || !isDirty(f, d)) return;
+    savingIds.current.add(d.id);
+    setRowSt((st) => ({ ...st, [d.id]: 'saving' }));
+    const ok = await saveRow(f);
+    savingIds.current.delete(d.id);
+    setRowSt((st) => ({ ...st, [d.id]: ok ? 'saved' : 'err' }));
+    if (ok) {
+      updForms((m) => { const nx = { ...m }; if (nx[d.id] === f) delete nx[d.id]; return nx; });
+      setTimeout(() => setRowSt((st) => (st[d.id] === 'saved' ? { ...st, [d.id]: '' } : st)), 2500);
+    }
+  }
+
+  /* papers of a bill changed: save them, and when the first paper is new let the AI read it (AI verification) */
+  async function savePapers(d, files) {
+    const { error } = await sb().from('company_docs').update({ files }).eq('id', d.id);
+    if (error) { flash(error.message, 'err'); return; }
+    const first = (files || [])[0];
+    const changed = first && first.path !== ((d.files || [])[0] || {}).path;
+    load();
+    if (changed) {
+      const err = await readBillPaper({ ...d, files });
+      if (err) flash(`${d.doc_no}: AI could not read the paper: ${err}`, 'err');
+      load();
+    }
+  }
+  /* 🤖 AI check: read every bill paper that has no AI read yet, two at a time (free AI limit) */
+  const [aiRun, setAiRun] = useState(null); // { done, total }
+  const unread = kind === 'receipt' ? (list || []).filter((d) => aiOn(d) && checkBill(d, list).status === 'wait') : [];
+  async function aiCheckAll() {
+    const todo = [...unread];
+    if (!todo.length) return;
+    let done = 0; let bad = 0;
+    setAiRun({ done, total: todo.length });
+    const worker = async () => {
+      while (todo.length) {
+        const d = todo.shift();
+        const err = await readBillPaper(d);
+        if (err) bad += 1;
+        done += 1;
+        setAiRun({ done, total: done + todo.length });
+      }
+    };
+    await Promise.all([worker(), worker()]);
+    setAiRun(null);
+    load();
+    flash(bad ? `AI read ${done - bad} papers, ${bad} could not be read.` : `AI read ${done} papers.`, bad ? 'err' : undefined);
+  }
+
+  async function saveRow(given) {
+    const f = given || row;
+    const total = r3(n(f.amount));
+    const vat = r3(n(f.vat));
+    const tag = f.id ? `${f.doc_no}: ` : '';
+    if (!f.party.trim()) { flash(`${tag}Type who was paid (Paid to).`, 'err'); return false; }
+    if (!(total > 0)) { flash(`${tag}Type the Grand Total (with VAT).`, 'err'); return false; }
+    if (vat < 0 || vat >= total) { flash(`${tag}VAT must be less than the Grand Total.`, 'err'); return false; }
+    const rno = String(f.receipt_no || '').trim();
+    const dup = rno && (list || []).find((d) => d.id !== f.id && String(shortOf(d).receipt_no || '').trim() === rno);
+    if (dup) { flash(`${tag}Receipt No. ${rno} is already saved as ${dup.doc_no}.`, 'err'); return false; }
+    const before = f.id ? (list || []).find((d) => d.id === f.id) : null;
+    const sub = r3(total - vat);
+    // keep the lines of an existing bill when the amount did not change, else one line with the amount without VAT
+    // scanned bill whose printed amounts were not changed: keep its printed lines and figures exactly as they are
+    const keepPaper = !!(before?.scan?.fixed && Math.abs(total - r3(n(before.scan.amount))) < 0.0005 && Math.abs(vat - r3(n(before.scan.vat_amount))) < 0.0005);
+    let items;
+    if (keepPaper && (before.items || []).length) items = before.items;
+    else if (before && Math.abs(lineTotal(before.items) - sub) < 0.0005 && (before.items || []).length) items = before.items;
+    else {
+      const desc = f.fuel || (before ? (before.items || []).map((i) => i.desc).filter(Boolean).join(', ') : '') || 'Purchase';
+      items = [{ desc, amount: sub }];
+    }
+    const pct = vat > 0 ? (Math.abs(r3(sub * 0.05) - vat) < 0.0005 ? 5 : Number(((vat / sub) * 100).toFixed(4))) : 0;
+    const last = (list || [])[0];
+    const rec = {
+      company: co, kind: 'receipt', doc_no: f.doc_no || null, doc_date: f.doc_date || todayISO(), party: f.party.trim(),
+      party_vat: f.vat_no || null, items, vat_pct: pct, department: f.department || null,
+      extra: Object.fromEntries(Object.entries({ ...(before?.extra || {}), ...(f.extra || {}) }).map(([k, v]) => [k, String(v ?? '').trim()]).filter(([, v]) => v)),
+      scan: { ...(before?.scan || {}), receipt_no: rno, vehicle_no: f.vehicle_no.trim(), fuel: f.fuel, vat_no: f.vat_no.trim(), amount: total, vat_amount: vat, sub: keepPaper ? (before.scan.sub ?? null) : sub },
+      updated_at: new Date().toISOString()
+    };
+    if (f.fuel) { rec.head = 'Vehicle Running and Maintenance'; rec.category = f.fuel; }
+    else if (!before) { rec.head = last?.head || 'Office Expenses'; rec.category = null; }
+    if (!before) rec.payment_method = last?.payment_method || 'Cash';
+    if (!f.id) setRowSaving(true);
+    const t = sb().from('company_docs');
+    const res = before ? await t.update(rec).eq('id', f.id).select().single() : await t.insert({ ...rec, created_by: me || null }).select().single();
+    if (res.error) setRowSaving(false);
+    if (res.error) { flash(res.error.code === '42501' ? 'You need Full access to save.' : `${tag}${res.error.message}`, 'err'); return false; }
+    const saved = res.data;
+    if (rec.department) addDept(co, rec.department); // a new department typed here goes into the list by itself
+    if (before) {
+      const { id, created_at: _c, ...back } = before;
+      pushUndo(`change ${before.doc_no}`, async () => { const { error } = await sb().from('company_docs').update(back).eq('id', id); if (error) throw new Error(error.message); });
+    } else {
+      pushUndo(`add ${saved.doc_no}`, async () => {
+        const { error } = await sb().from('company_docs').delete().eq('id', saved.id); if (error) throw new Error(error.message);
+        if (added.length) await sb().storage.from('doc-files').remove(added.map((x) => x.path));
+      });
+    }
+    if (!f.id) setRow(null);
+    await load();
+    flash(`${saved.doc_no} saved${added.length ? ` with ${added.length} paper${added.length === 1 ? '' : 's'}` : ''}. Added to ${C.short} expenses (All Companies).`);
+    return true;
+  }
+
+  const pushUndo = (label, run) => setUndo((u) => [...u.slice(-29), { label, run }]);
+
+  async function doUndo() {
+    const step = undo[undo.length - 1];
+    if (!step || busy) return;
+    setBusy(true);
+    const err = await step.run().catch((e) => e.message);
+    setBusy(false);
+    if (err) { flash(`Undo failed: ${err}`, 'err'); return; }
+    setUndo((u) => u.slice(0, -1));
+    setPicked([]); load();
+    flash(`↶ Undone: ${step.label}`);
+  }
+
+  /* put deleted rows back exactly (same id, number and papers); the DB trigger adds the expense lines again */
+  async function restoreRows(rows) {
+    const { error } = await sb().from('company_docs').insert(rows.map((r) => ({ ...r })));
+    if (error) return error.message;
+    rows.forEach((r) => (r.files || []).forEach((f) => trash.current.delete(f.path)));
+    return '';
+  }
+
+  async function emptyTrash() {
+    const paths = [...trash.current];
+    trash.current.clear();
+    if (paths.length) await sb().storage.from('doc-files').remove(paths);
+  }
+
+  function toggleEdit() {
+    if (editing) {
+      if (doc && dirty && !window.confirm('Close without saving?')) { return; }
+      if (doc && !doc.id) setDoc(null);
+      else if (doc && dirty) openDoc((list || []).find((d) => d.id === doc.id) || doc);
+      setEditing(false); setPicked([]); setBulk(null); setUndo([]); setRow(null); updForms(() => ({})); setRowSt({});
+      emptyTrash();
+      return;
+    }
+    setEditing(true);
+  }
+  // ＋ New invoice straight from the list or the empty box (Owner 9 Nov 2026): edit password once, then the new invoice opens
+  async function quickNew() {
+    if (!(await requestEditPassword())) return;
+    setEditing(true);
+    newDoc();
+  }
+  // lock again when this page closes
+  useEffect(() => () => { lockEdit(); emptyTrash(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pickOne = (id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+
+  async function removeFiles(rows) {
+    const paths = rows.flatMap((d) => (d.files || []).map((f) => f.path)).filter(Boolean);
+    if (paths.length) await sb().storage.from('doc-files').remove(paths);
+  }
+
+  async function bulkDelete() {
+    const rows = (list || []).filter((d) => picked.includes(d.id));
+    setBusy(true);
+    const { error } = await sb().from('company_docs').delete().in('id', rows.map((d) => d.id));
+    setBusy(false);
+    if (error) { flash(error.code === '42501' ? 'You need Full access to delete.' : error.message, 'err'); return; }
+    rows.forEach((r) => (r.files || []).forEach((f) => f.path && trash.current.add(f.path)));
+    pushUndo(`delete ${rows.length}`, async () => { const e = await restoreRows(rows); if (e) throw new Error(e); });
+    setBulk(null); setPicked([]); load();
+    flash(`${rows.length} deleted${kind === 'receipt' ? '. Removed from All Companies too.' : ''}`);
+  }
+
+  /* Move to another company and / or to the other type (Invoices <-> Payment receipts).
+     Each doc gets the next number of where it goes (PR-AW-0001 -> PR-ST-0005, INV-AW-0002 -> PR-AW-0007).
+     A payment receipt is an expense in All Companies (DB trigger): it is added, moved or removed with it. */
+  async function bulkMove(to, toKind = kind) {
+    const rows = (list || []).filter((d) => picked.includes(d.id));
+    const T = companyOf(to);
+    setBusy(true);
+    const pre = `${KINDS[toKind].prefix}-${CO_CODE[to] || 'X'}-`;
+    const { data: there } = await sb().from('company_docs').select('doc_no').eq('company', to).eq('kind', toKind);
+    let max = (there || []).reduce((mx, d) => { const m = String(d.doc_no || '').match(/(\d+)\s*$/); return m ? Math.max(mx, Number(m[1])) : mx; }, 0);
+    let ok = 0; let err = '';
+    const old = [];
+    for (const d of [...rows].reverse()) {
+      max += 1;
+      const depts = DEPARTMENTS[to] || [];
+      let department = d.department && !depts.includes(d.department) && depts.length ? depts[0] : d.department;
+      const change = { company: to, kind: toKind, doc_no: `${pre}${String(max).padStart(4, '0')}`, updated_at: new Date().toISOString() };
+      if (toKind === 'receipt') {
+        // a receipt needs payment method, department and head (kept if it already had them)
+        if (!department) department = depts[0] || null;
+        change.payment_method = d.payment_method || 'Cash';
+        change.head = d.head || 'Office Expenses';
+      }
+      change.department = department || null;
+      const { error } = await sb().from('company_docs').update(change).eq('id', d.id);
+      if (error) { err = error.code === '42501' ? 'You need Full access to move.' : error.message; break; }
+      old.push({ id: d.id, company: d.company, kind: d.kind, doc_no: d.doc_no, department: d.department, payment_method: d.payment_method, head: d.head });
+      ok += 1;
+    }
+    if (old.length) {
+      pushUndo(`move ${old.length}`, async () => {
+        for (const o of old) {
+          const { id, ...back } = o;
+          const { error } = await sb().from('company_docs').update({ ...back, updated_at: new Date().toISOString() }).eq('id', id);
+          if (error) throw new Error(error.message);
+        }
+      });
+    }
+    setBusy(false);
+    setBulk(null); setPicked([]); load();
+    if (err) flash(`${ok} moved. Stopped: ${err}`, 'err');
+    else {
+      const where = [to !== co ? T.short : '', toKind !== kind ? KINDS[toKind].label : ''].filter(Boolean).join(' · ');
+      const exp = toKind === 'receipt' && kind !== 'receipt' ? ` and added to ${T.short} expenses`
+        : toKind !== 'receipt' && kind === 'receipt' ? ' and removed from All Companies expenses'
+          : toKind === 'receipt' && to !== co ? ' (expense lines moved too)' : '';
+      flash(`${ok} moved to ${where}${exp}.`);
+    }
+  }
+
+  async function deleteDoc() {
+    const before = (list || []).find((d) => d.id === doc.id);
+    const { error } = await sb().from('company_docs').delete().eq('id', doc.id);
+    if (error) { flash(error.message, 'err'); return; }
+    if (before) {
+      (before.files || []).forEach((f) => f.path && trash.current.add(f.path));
+      pushUndo(`delete ${before.doc_no}`, async () => { const e = await restoreRows([before]); if (e) throw new Error(e); });
+    } else await removeFiles([doc]);
+    setDel(false); setDoc(null); setDirty(false); load();
+    flash(kind === 'receipt' ? 'Deleted. Removed from All Companies too.' : 'Deleted');
+  }
+
+  async function einvPdfFile() {
+    const el = paperRef.current;
+    if (!el) throw new Error('Open the invoice first');
+    return paperPdf(el, `${doc.doc_no || 'invoice'}.pdf`);
+  }
+  async function einvDownloadPdf() {
+    setSharing(true);
+    try {
+      const f = await einvPdfFile();
+      const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); a.remove();
+    } catch (e) { flash(e.message, 'err'); }
+    setSharing(false);
+  }
+  async function einvShare() {
+    if (dirty) { flash('Press Save first, then share.', 'err'); return; }
+    setSharing(true);
+    const text = `${sellerFor(co, doc).name_en}\nTax Invoice ${doc.doc_no} · ${fmtD(doc.doc_date)}\nTo: ${doc.party}\nTotal: ${totalsOf(doc).tot.toFixed(3)} OMR\nView / download: ${viewUrl(doc.einv?.uuid)}`;
+    try {
+      const f = await einvPdfFile();
+      if (navigator.canShare && navigator.canShare({ files: [f] })) {
+        await navigator.share({ files: [f], title: `Invoice ${doc.doc_no}`, text });
+      } else {
+        // computer: the PDF downloads, then choose WhatsApp or Email and attach it
+        const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; document.body.appendChild(a); a.click(); a.remove();
+        openShare({ title: `Invoice ${doc.doc_no}`, text: `${text}\n(The PDF ${f.name} is downloaded: attach it.)` });
+      }
+    } catch (e) { if (e?.name !== 'AbortError') flash(e.message, 'err'); }
+    setSharing(false);
+  }
+  function einvXml() {
+    if (!doc.einv?.uuid) { flash('Press Save first (the UUID is made on save).', 'err'); return; }
+    downloadText(`${doc.doc_no || 'invoice'}-einvoice.xml`, ublXml(co, doc));
+  }
+
+  function printDoc() {
+    if (dirty && canEdit) flash('Tip: press Save first so this copy is kept.');
+    setTimeout(() => window.print(), 50);
+  }
+
+  if (co === null) return <div className="loading">Loading...</div>;
+  if (!gate.ok) return <CompanyPicker co={co} gate={gate} title={kind === 'invoice' ? 'Invoices' : 'Bills'} onPick={(k) => setCo(k)} />;
+
+  const switcher = (
+    <div className="co-switch no-print" role="tablist" aria-label="Company">
+      {coChoices.map((c) => (
+        <button key={c.key} type="button" role="tab" aria-selected={co === c.key} className={`${co === c.key ? 'on' : ''}${c.mine ? '' : ' co-off'}`} disabled={!c.mine} title={c.mine ? undefined : 'No access to this company'}
+          onClick={() => { if (!c.mine) return; if (doc) closeDoc(); setCo(c.key); }}>{c.short}</button>
+      ))}
+      <Link href="/transport" className="co-tab co-tr">🚚 Transport</Link>
+      <Link href="/docs" className="co-tab co-sum">📋 Checklist</Link>
+      <span className="co-tab on" role="tab" aria-selected="true">🧾 Bills</span>
+      <Link href={`/expenses/salary?co=${co}`} className="co-tab">💰 Salary</Link>
+      <Link href="/expenses/vat" className="co-tab co-sum co-vat">🧾 VAT return</Link>
+      {!doc && <button type="button" className="co-tab co-print" onClick={openCustomPrint} disabled={!(list || []).length}>🖨 Custom print</button>}
+    </div>
+  );
+
+  /* ---------------- Editor / paper ---------------- */
+  if (doc) {
+    const ro = !canEdit;
+    const E = isEinvoice(co, kind);
+    const S = E ? sellerFor(co, doc) : null;
+    const when = E ? issueISO(doc) : null;
+    const sub = lineTotal(doc.items);
+    const vat = r3((sub * n(doc.vat_pct)) / 100);
+    const tot = r3(sub + vat);
+    return (
+      <>
+        <div className="page-tools">
+          <button type="button" className="crumb linkish" onClick={closeDoc}>← {K.label}</button>
+          <div className="tools">
+            <EditToggle show={isAdmin} on={editing} onClick={toggleEdit} />
+            {canEdit && <button type="button" className="btn" onClick={saveDoc} disabled={saving}>{saving ? 'Saving...' : dirty ? '💾 Save' : '✓ Saved'}</button>}
+            <button type="button" className="btn ghost" onClick={printDoc}>🖨 Print / PDF</button>
+            {E && doc.id && <button type="button" className="btn" onClick={einvShare} disabled={sharing}>{sharing ? 'Making PDF...' : '📤 Share (WhatsApp / Email)'}</button>}
+            {E && doc.id && <button type="button" className="btn ghost" onClick={einvDownloadPdf} disabled={sharing}>📕 PDF</button>}
+            {E && doc.id && <button type="button" className="btn ghost" onClick={einvXml}>⬇ E-invoice XML</button>}
+            {canEdit && undo.length > 0 && <button type="button" className="btn ghost" onClick={doUndo} disabled={busy}>↶ Undo {undo[undo.length - 1].label}</button>}
+            {canEdit && doc.id && <button type="button" className="btn ghost danger-text" onClick={() => setDel(true)}>Delete</button>}
+          </div>
+        </div>
+        {E && (!S.vat || !S.name_ar) && <p className="cd-hint no-print ei-miss">⚠ {!S.vat ? 'VAT No.' : ''}{!S.vat && !S.name_ar ? ' and ' : ''}{!S.name_ar ? 'Arabic name' : ''} of {C.short} not set yet. Add {!S.vat && !S.name_ar ? 'them' : 'it'} in Admin › Company access › 🧾 E-invoice details{doc.einv?.seller ? ' (this saved invoice keeps the details it was saved with)' : ''}.</p>}
+        {E && <p className="cd-hint no-print">🧾 <b>Govt e-invoice (Fawtara) ready.</b> Saving gives it a UUID, issue time and QR code. Share it as PDF on WhatsApp or email, print it, or download the XML for the e-invoice service provider (the app does not send it to the Tax Authority).</p>}
+        {kind === 'receipt' && <p className="cd-hint no-print">When you save, this bill is added to <b>{C.short}</b> expenses in All Companies{doc.department ? <> (department <b>{doc.department}</b>)</> : ''} by itself. Change or delete it here and the expense follows.</p>}
+
+        {kind === 'receipt' && (doc.files || []).length > 0 && (
+          <div className="pp-wrap">
+            <div className="pp-cap">🧾 Bill from {doc.party || 'the supplier'}</div>
+            <PaperPreview files={doc.files} />
+          </div>
+        )}
+
+        {isAP(co, kind) ? (
+          <AliPackPaper doc={doc} S={S} C={C} ro={ro} when={when} viewQr={viewQr} qrUrl={qrUrl} paperRef={paperRef}
+            set={set} setItem={setItem} addItem={addItem} removeItem={removeItem} pickParty={pickParty} parties={parties} flash={flash} />
+        ) : (
+        <article ref={paperRef} className={`cd-paper k-${kind}${ro ? ' ro' : ''}${kind === 'receipt' ? ' cd-purchase' : ''}${E ? ' einv' : ''}`}>
+          {kind === 'receipt' ? (
+            /* Bill = our purchase: NO letterhead (no logo, CR, address), just the record */
+            <header className="cd-head cd-head-plain">
+              <div className="cd-co">
+                <b>Bill</b>
+                <span>Purchase by {C.short}</span>
+              </div>
+              <div className="cd-title">
+                <div className="cd-meta">
+                  <label><span>No.</span><input className="cd-in" value={doc.doc_no || ''} readOnly={ro} onChange={(e) => set('doc_no', e.target.value)} /></label>
+                  <label><span>Date</span>{ro ? <span className="cd-ro">{fmtD(doc.doc_date)}</span> : <DateInput className="cd-in" value={doc.doc_date || ''} onChange={(v) => set('doc_date', v)} />}</label>
+                </div>
+              </div>
+            </header>
+          ) : (
+          <header className="cd-head">
+            {C.logo && <img className="cd-logo" src={C.logo} alt={C.short} />}
+            <div className="cd-co">
+              <b>{C.name}</b>
+              {E && S.name_ar && <b className="ei-ar" dir="rtl" lang="ar">{S.name_ar}</b>}
+              <span>{C.cr}{E && S.vat ? ` · VAT No. ${S.vat}` : ''}</span>
+              <span>{C.address}</span>
+            </div>
+            <div className="cd-title">
+              <div className="cd-title-main">{E ? <>TAX INVOICE <span className="ei-ar" dir="rtl" lang="ar">فاتورة ضريبية</span></> : K.title}</div>
+              <div className="cd-meta">
+                <label><span>{E ? 'No. / الرقم' : 'No.'}</span><input className="cd-in" value={doc.doc_no || ''} readOnly={ro} onChange={(e) => set('doc_no', e.target.value)} /></label>
+                <label><span>{E ? 'Date / التاريخ' : 'Date'}</span>{ro ? <span className="cd-ro">{fmtD(doc.doc_date)}</span> : <DateInput className="cd-in" value={doc.doc_date || ''} onChange={(v) => set('doc_date', v)} />}</label>
+                {E && doc.einv?.issued_at && <label><span>Time / الوقت</span><span className="cd-ro">{when.time}</span></label>}
+              </div>
+            </div>
+          </header>
+          )}
+          {kind !== 'receipt' && <div className="cd-rule" />}
+          {E && (
+            <div className="ei-strip">
+              <span><b>{buyerType(doc) === 'B2B' ? 'B2B · Standard tax invoice' : 'B2C · Tax invoice'}</b></span>
+              <span>Invoice UUID: <code>{doc.einv?.uuid || 'made when you save'}</code></span>
+              <span>Currency: OMR</span>
+            </div>
+          )}
+
+          <section className="cd-party">
+            <div className="cd-cap">{E ? 'Bill to / العميل' : K.party}</div>
+            <input className="cd-in cd-big" list="cd-parties" placeholder={K.partyPh} value={doc.party || ''} readOnly={ro} onChange={(e) => pickParty(e.target.value)} />
+            <datalist id="cd-parties">{parties.map((p) => <option key={p} value={p} />)}</datalist>
+            <textarea className="cd-in cd-area" rows={2} placeholder="Address, phone, email (optional)" value={doc.party_details || ''} readOnly={ro} onChange={(e) => set('party_details', e.target.value)} />
+            {kind === 'invoice' && (
+              <label className="cd-inline"><span>{E ? 'Buyer VAT No. / الرقم الضريبي' : 'VAT No.'}</span><input className="cd-in" placeholder={E ? 'OM + 10 digits (empty = B2C)' : 'optional'} value={doc.party_vat || ''} readOnly={ro} onChange={(e) => set('party_vat', e.target.value)} /></label>
+            )}
+          </section>
+
+          {kind === 'receipt' && (
+            <section className="cd-grid">
+              <label><span>Payment method</span>
+                <input className="cd-in" list="cd-pay" value={doc.payment_method || ''} readOnly={ro} onChange={(e) => set('payment_method', e.target.value)} />
+              </label>
+              <label><span>Department</span>
+                {ro ? <input className="cd-in" value={doc.department || ''} readOnly />
+                  : <DeptPicker co={co} className="cd-in" value={doc.department || ''} onChange={(v) => set('department', v)} />}
+              </label>
+              <label className="no-print-soft"><span>Head of account</span>
+                <input className="cd-in" list="cd-head" value={doc.head || ''} readOnly={ro} onChange={(e) => set('head', e.target.value)} />
+              </label>
+              <label className="no-print-soft"><span>Bill category</span>
+                <input className="cd-in" list="cd-cat" value={doc.category || ''} readOnly={ro} onChange={(e) => set('category', e.target.value)} />
+              </label>
+              <datalist id="cd-pay">{PAY_METHODS.map((p) => <option key={p} value={p} />)}</datalist>
+              <datalist id="cd-head">{HEADS.map((p) => <option key={p} value={p} />)}</datalist>
+              <datalist id="cd-cat">{CATEGORIES.map((p) => <option key={p} value={p} />)}</datalist>
+            </section>
+          )}
+
+          <table className="cd-t">
+            <thead>
+              {E ? (
+                <tr><th className="c-no">S.No</th><th className="c-desc">Description<span className="ei-thar">الوصف</span></th><th className="c-qty">Qty<span className="ei-thar">الكمية</span></th><th className="c-amt c-price">Unit price<span className="ei-thar">سعر الوحدة</span></th><th className="c-amt">Amount (OMR)<span className="ei-thar">المبلغ بدون ضريبة</span></th>{!ro && <th className="c-x no-print" />}</tr>
+              ) : (
+                <tr><th className="c-no">S.No</th><th>Description</th><th className="c-amt">Amount (OMR)</th>{!ro && <th className="c-x no-print" />}</tr>
+              )}
+            </thead>
+            <tbody>
+              {doc.items.map((it, i) => (
+                <tr key={i} className={!it.desc && (it.amount === '' || it.amount === null) ? 'is-empty' : ''}>
+                  <td className="c-no">{i + 1}</td>
+                  <td><textarea className="cd-in cd-desc" rows={1} value={it.desc} readOnly={ro} placeholder="Description" onChange={(e) => setItem(i, 'desc', e.target.value)} /></td>
+                  {E && (
+                    <>
+                      <td className="c-qty">{ro ? <span className="cd-ro">{it.qty === '' || it.qty === undefined ? '' : it.qty}</span>
+                        : <input className="cd-in cd-num" inputMode="decimal" value={it.qty ?? ''} placeholder="1" onChange={(e) => setItem(i, 'qty', e.target.value.replace(/[^\d.]/g, ''))} />}</td>
+                      <td className="c-amt">{ro ? <span className="cd-ro">{it.price === '' || it.price === undefined ? '' : fmt3(it.price)}</span>
+                        : <input className="cd-in cd-num" inputMode="decimal" value={it.price ?? ''} placeholder="0.000" onChange={(e) => setItem(i, 'price', e.target.value.replace(/[^\d.]/g, ''))} />}</td>
+                    </>
+                  )}
+                  <td className="c-amt">
+                    {ro ? <span className="cd-ro">{it.amount === '' ? '' : fmt3(it.amount)}</span>
+                      : <input className="cd-in cd-num" inputMode="decimal" value={it.amount} placeholder="0.000"
+                        onChange={(e) => setItem(i, 'amount', e.target.value.replace(/[^\d.]/g, ''))}
+                        onBlur={(e) => e.target.value !== '' && setItem(i, 'amount', r3(e.target.value).toFixed(3))} />}
+                  </td>
+                  {!ro && <td className="c-x no-print"><button type="button" className="cd-x" onClick={() => removeItem(i)} aria-label={`Remove line ${i + 1}`}>×</button></td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!ro && <button type="button" className="btn small ghost no-print cd-add" onClick={addItem}>+ Add line</button>}
+
+          <section className="cd-sum">
+            <div className="cd-words"><span className="cd-cap">Amount in words</span>{omrInWords(tot)}
+              {E && (
+                <div className="ei-qr-row">
+                  {/* our QR: opens the full invoice with ⬇ Download PDF (/i/<uuid>, no login) */}
+                  <div className="ei-qr">
+                    {viewQr ? <img src={viewQr} alt="Scan to view this invoice" /> : <span className="ei-qr-empty">QR code after Save</span>}
+                    <small><b>Scan to view and download this invoice</b></small>
+                  </div>
+                  {/* Govt (Fawtara) QR: hidden for now (Owner 9 Nov 2026), turn on with SHOW_GOVT_QR in lib/einvoice.js */}
+                  {SHOW_GOVT_QR && (
+                    <div className="ei-qr">
+                      {qrUrl ? <img src={qrUrl} alt="E-invoice QR code" /> : <span className="ei-qr-empty">QR code after Save</span>}
+                      <small>Govt e-invoice QR</small>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <dl>
+              <dt>Subtotal</dt><dd><Omr v={sub} /></dd>
+              <dt>
+                VAT{' '}
+                {ro ? `${n(doc.vat_pct)}%` : (
+                  <select className="cd-vat" value={String(n(doc.vat_pct))} onChange={(e) => set('vat_pct', Number(e.target.value))}>
+                    <option value="0">0%</option><option value="5">5%</option>
+                  </select>
+                )}
+              </dt><dd><Omr v={vat} /></dd>
+              <dt className="cd-tot">Total</dt><dd className="cd-tot"><Omr v={tot} /></dd>
+            </dl>
+          </section>
+
+          <textarea className={`cd-in cd-notes${doc.notes ? '' : ' is-empty'}`} rows={2} placeholder="Notes (optional)" value={doc.notes || ''} readOnly={ro} onChange={(e) => set('notes', e.target.value)} />
+
+          {kind !== 'receipt' && <footer className="cd-sign">
+            <div>{kind === 'invoice' && <SignStamp value={doc.signs} onChange={ro ? null : (v) => set('signs', v)} flash={flash} className="cd-ss" />}
+              <div className="cd-line" /><span>{kind === 'receipt' ? 'Paid by' : 'Authorised signature'}</span>
+              <input className="cd-in cd-signame" placeholder="Name (optional)" value={doc.signatory || ''} readOnly={ro} onChange={(e) => set('signatory', e.target.value)} />
+            </div>
+            <div><div className="cd-line" /><span>{kind === 'receipt' ? 'Received by' : 'Received by (client)'}</span></div>
+          </footer>}
+        </article>
+        )}
+        {shareModal}
+
+        {doc.id || doc.scan ? (
+          <section className="di-saved no-print">
+            {doc.id && (
+              <div className="di-saved-files">
+                <b>📎 Original paper</b>
+                <DocFiles row={{ id: `company_docs/${doc.id}`, owner: doc.party, doc_name: doc.doc_no, files: doc.files || [] }}
+                  canEdit={canEdit} userName={me} flash={flash}
+                  onSave={async (files) => {
+                    const { error } = await sb().from('company_docs').update({ files }).eq('id', doc.id);
+                    if (error) { flash(error.message, 'err'); return; }
+                    setDoc((d) => ({ ...d, files })); load();
+                  }} />
+              </div>
+            )}
+            {doc.scan || hasShort(doc) ? (() => {
+              const x = shortOf(doc);
+              const setS = (k, v) => { setDoc((d) => ({ ...d, scan: { ...shortOf(d), ...(d.scan || {}), [k]: v } })); setDirty(true); };
+              const box = (k, label) => (
+                <label key={k}><span>{label}</span>
+                  {ro ? <b>{x[k] || '-'}</b> : <input value={x[k] || ''} onChange={(e) => setS(k, e.target.value)} />}
+                </label>
+              );
+              return (
+                <div className="dx-short">
+                  <div className="dx-short-cap">From the paper <small>(not printed on the letterhead)</small></div>
+                  <div className="dx-short-grid">
+                    {box('receipt_no', 'Receipt No.')}
+                    {box('vehicle_no', 'Vehicle No.')}
+                    <label><span>Fuel</span>
+                      {ro ? <b>{x.fuel || '-'}</b> : (
+                        <select value={x.fuel || ''} onChange={(e) => setS('fuel', e.target.value)}>
+                          <option value="">Not fuel</option>{FUELS.map((f) => <option key={f} value={f}>{f}</option>)}
+                        </select>
+                      )}
+                    </label>
+                    {box('vat_no', 'VAT No.')}
+                    <label><span>Amount</span><b>{x.amount === null || x.amount === undefined || x.amount === '' ? '-' : <Omr v={n(x.amount)} />}</b>
+                      {n(x.vat_amount) ? <small className="muted">VAT {fmt3(x.vat_amount)} inside</small> : null}</label>
+                  </div>
+                </div>
+              );
+            })() : null}
+          </section>
+        ) : null}
+
+        {del && (
+          <Modal title={`Delete ${K.one.toLowerCase()}?`} onClose={() => setDel(false)}>
+            <p style={{ margin: 0 }}>Delete <b>{doc.doc_no}</b> ({doc.party})?{kind === 'receipt' && ' Its line in All Companies is removed too.'}</p>
+            <div className="modal-actions">
+              <button className="btn ghost" onClick={() => setDel(false)}>Cancel</button>
+              <button className="btn danger" onClick={deleteDoc}>Delete</button>
+            </div>
+          </Modal>
+        )}
+        {toast && <div className={`toast ${toast.kind}`} role="status">{toast.text}</div>}
+      </>
+    );
+  }
+
+  /* ---------------- List ---------------- */
+  /* search: every word must be found somewhere in the doc (number, date, party, lines, receipt no., vehicle, fuel, VAT no., amounts, payment, department ...) */
+  const hay = (d) => {
+    const x = shortOf(d);
+    const tot = billFig(d).total;
+    return [d.doc_no, fmtD(d.doc_date), d.doc_date, d.party, d.party_details, d.party_vat, (d.items || []).map((i) => `${i.desc} ${i.amount}`).join(' '),
+      x.receipt_no, x.vehicle_no, String(x.vehicle_no || '').replace(/[\s/-]/g, ''), x.fuel, x.vat_no, x.amount, tot.toFixed(3),
+      d.payment_method, d.department, d.head, d.category, d.notes, d.signatory, d.created_by, KINDS[d.kind]?.one].filter(Boolean).join(' ').toLowerCase();
+  };
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = (list || []).filter((d) => { if (!words.length) return true; const h = hay(d); return words.every((w) => h.includes(w)); });
+  const totalOf = (d) => billFig(d).total; // scanned bill = printed Grand Total, typed bill = lines + VAT %
+
+  // columns in table order (cells are hidden by position)
+  const pickCols = [
+    ...(kind === 'receipt' ? [['paper', 'Bill paper'], ['verify', 'Verification']] : []),
+    ['no', 'No.'], ['date', 'Date'], ['party', K.party], ['receipt_no', 'Receipt No.'], ['vehicle_no', 'Vehicle No.'], ['fuel', 'Fuel'],
+    ['sub', 'Subtotal'], ['vat', 'VAT 5%'], ['grand', 'Grand Total'], ['vat_no', 'VAT No.'],
+    ...(kind === 'receipt' ? [['department', 'Department']] : []),
+    ...xcols.map((c) => [`x:${c.key}`, c.name]),
+  ].map(([key, label]) => ({ key, label }));
+  const hidden = hideCols.filter((k) => pickCols.some((c) => c.key === k));
+  const lead = canEdit ? 1 : 0;
+  const hideCss = hidden.length
+    ? hidden.map((k) => pickCols.findIndex((c) => c.key === k) + 1 + lead).map((i) => `table.iv-list tr > :nth-child(${i})`).join(',\n') + ' { display: none; }'
+    : '';
+  const colPick = <ColumnPicker cols={pickCols} hidden={hidden} onChange={saveHide} />;
+  const verCount = kind === 'receipt' ? (list || []).filter((d) => d.verify?.status === 'verified').length : 0;
+  const aiBtn = kind === 'receipt' && isAdmin ? (<>
+    <button type="button" className="btn ghost" disabled={!!aiRun || !unread.length} onClick={aiCheckAll}
+      title={unread.length ? 'AI reads every bill paper not read yet' : 'Every bill paper is already read by AI'}>
+      {aiRun ? `🤖 Reading ${aiRun.done} of ${aiRun.total}...` : `🤖 AI check${unread.length ? ` (${unread.length})` : ''}`}
+    </button>
+    <span className="muted bv-sum">✔ {verCount} of {(list || []).length} verified</span>
+  </>) : null;
+
+  // 🔒 company buttons first, each company opens with its password (9 Nov 2026)
+
+  return (
+    <>
+      <div className="company-head ch-top">
+        <span className="company-name">{C.name}</span>
+        <h1>{K.label}</h1>
+        <p className="sub">{kind === 'receipt' ? 'Each bill is added to All Companies by itself' : 'S.No, description and amount'}</p>
+      </div>
+
+      <div className="page-tools">
+        <Link href={`/expenses?co=${co}`} className="crumb">← All Companies</Link>
+        <div className="tools">
+          <input className="iv-search" type="search" placeholder="Search anything: vehicle, receipt no., petrol, amount, date..." value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+      </div>
+
+      {switcher}
+      <div className="head-chips no-print" style={{ marginTop: 10 }}>
+        {Object.entries(KINDS).map(([k, v]) => (
+          <button key={k} type="button" className={`rp-chip ${kind === k ? 'active' : ''}`} onClick={() => setKind(k)}>{k === 'invoice' ? '🧾' : '💵'} {v.label}</button>
+        ))}
+      </div>
+
+      {list !== null && shown.length > 0 && (() => {
+        const tot = r3(shown.reduce((t, d) => t + totalOf(d), 0));
+        const vat = r3(shown.reduce((t, d) => t + billFig(d).vat, 0));
+        return (
+          <div className="rp-tiles dx-tiles">
+            <div className="rp-tile">
+              <div className="rp-tile-label">{kind === 'invoice' ? '🧾' : '💵'} Grand Total</div>
+              <div className="rp-tile-num"><Omr v={tot} /></div>
+              <div className="rp-tile-sub">{shown.length} {shown.length === 1 ? K.one.toLowerCase() : K.label.toLowerCase()}{q ? ' found' : ''} · {C.short} · with VAT</div>
+            </div>
+            <div className="rp-tile">
+              <div className="rp-tile-label">🧾 VAT 5%</div>
+              <div className="rp-tile-num"><Omr v={vat} /></div>
+              <div className="rp-tile-sub">{vat ? 'Inside the Grand Total' : 'No VAT on these'}</div>
+            </div>
+            <div className="rp-tile">
+              <div className="rp-tile-label">🧮 Subtotal</div>
+              <div className="rp-tile-num"><Omr v={r3(tot - vat)} /></div>
+              <div className="rp-tile-sub">Grand Total minus VAT 5%</div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {!isAdmin && (
+        <div className="dx-bar dx-bar-off no-print">{colPick}</div>
+      )}
+      {isAdmin && !canEdit && (
+        <div className="dx-bar dx-bar-off no-print">
+          <EditToggle show on={editing} onClick={toggleEdit} close={false} />
+          {kind === 'invoice' && <button type="button" className="btn dx-new" onClick={quickNew}>＋ New invoice</button>}
+          {colPick}
+          {aiBtn}
+          <span className="muted dx-hint">Press Edit to add, import, delete or move {K.label.toLowerCase()}</span>
+          <span className="dx-right"><EditToggle show on={editing} onClick={toggleEdit} close={false} /></span>
+        </div>
+      )}
+      {canEdit && (
+        <div className="dx-bar no-print">
+          <b>✏️ Edit</b>
+          {colPick}
+          {aiBtn}
+          <button type="button" className="btn" onClick={() => (kind === 'receipt' ? startRow(null) : newDoc())} disabled={kind === 'receipt' && !!row && !row.id}>＋ Add {kind === 'receipt' ? 'row' : K.one.toLowerCase()}</button>
+          {kind === 'receipt' && <button type="button" className="btn" onClick={() => setColsOpen(true)}>▥ Columns: add, rename, delete</button>}
+          <DocImport co={co} coShort={C.short} kind={kind} userName={me} last={(list || [])[0]} nextNo={nextNoFor} flash={flash}
+            onDone={(rows) => {
+              load();
+              if (rows?.length) {
+                pushUndo(`import ${rows.length}`, async () => {
+                  const { error } = await sb().from('company_docs').delete().in('id', rows.map((r) => r.id));
+                  if (error) throw new Error(error.message);
+                  const paths = rows.map((r) => r.path).filter(Boolean);
+                  if (paths.length) await sb().storage.from('doc-files').remove(paths);
+                });
+              }
+            }} />
+          <span className="dx-sep" />
+          <button type="button" className="btn ghost" disabled={!shown.length}
+            onClick={() => setPicked(picked.length === shown.length ? [] : shown.map((d) => d.id))}>
+            {picked.length && picked.length === shown.length ? '☐ Clear' : '☑ Select all'}
+          </button>
+          <button type="button" className="btn ghost danger-text" disabled={!picked.length} onClick={() => setBulk({ act: 'delete' })}>🗑 Delete{picked.length ? ` (${picked.length})` : ''}</button>
+          <button type="button" className="btn ghost" disabled={!picked.length}
+            onClick={() => setBulk({ act: 'move', to: co, toKind: kind === 'invoice' ? 'receipt' : 'invoice' })}>↔ Move{picked.length ? ` (${picked.length})` : ''}</button>
+          <button type="button" className="btn ghost" disabled={!undo.length || busy} onClick={doUndo}
+            title={undo.length ? `Undo: ${undo[undo.length - 1].label}` : 'Nothing to undo yet'}>
+            ↶ Undo{undo.length ? ` ${undo[undo.length - 1].label}` : ''}
+          </button>
+          <span className="dx-sep" />
+          <CloseEdit onClose={toggleEdit} disabled={busy || rowSaving} />
+          <span className="muted dx-hint">{picked.length ? `${picked.length} selected` : kind === 'receipt' ? 'Type in any box · a bill saves by itself when you leave its row · Esc puts it back' : 'Tick rows to delete or move'}</span>
+          <span className="dx-right"><CloseEdit onClose={toggleEdit} disabled={busy || rowSaving} /></span>
+        </div>
+      )}
+
+      {list === null ? <div className="loading">Loading...</div> : shown.length === 0 && !(row && !row.id && kind === 'receipt') ? (
+        <div className="iv-empty">
+          <div className="iv-empty-mark">{kind === 'invoice' ? '🧾' : '💵'}</div>
+          <p>No {K.label.toLowerCase()} yet for {C.short}.</p>
+          {kind === 'invoice' && isAdmin && <button type="button" className="btn dx-new iv-empty-add" onClick={() => (canEdit ? newDoc() : quickNew())}>＋ Create invoice</button>}
+        </div>
+      ) : (
+        <div className="iv-table-wrap">
+          {hideCss && <style>{hideCss}</style>}
+          <table className="iv-list" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr>{canEdit && <th className="dx-c"><input type="checkbox" aria-label="Select all" checked={!!shown.length && picked.length === shown.length} onChange={() => setPicked(picked.length === shown.length ? [] : shown.map((d) => d.id))} /></th>}{kind === 'receipt' && <th>{hl('paper', 'Bill paper')}</th>}{kind === 'receipt' && <th>Verification</th>}<th>{hl('no', 'No.')}</th><th>{hl('date', 'Date')}</th><th>{hl('party', K.party)}</th><th>{hl('receipt_no', 'Receipt No.')}</th><th>{hl('vehicle_no', 'Vehicle No.')}</th><th>{hl('fuel', 'Fuel')}</th><th className="num">{hl('sub', 'Subtotal')}</th><th className="num">{hl('vat', 'VAT 5%')}</th><th className="num">{hl('grand', 'Grand Total')}</th><th>{hl('vat_no', 'VAT No.')}</th>{kind === 'receipt' && <th>{hl('department', 'Department')}</th>}{xcols.map((c) => <th key={c.key}>{c.name}</th>)}{kind === 'receipt' && canEdit && <th />}</tr></thead>
+            <tbody>
+              {kind === 'receipt' && row && !row.id && <BillRow f={row} set={setBill} sugg={sugg} xcols={xcols} canPick={canEdit} co={co} saving={rowSaving} onSave={saveRow} onCancel={() => setRow(null)} />}
+              {shown.map((d) => kind === 'receipt' && canEdit ? (
+                <BillRow key={d.id} xcols={xcols} f={forms[d.id] || billForm(d)} set={setBillFor(d)} sugg={sugg} canPick co={co}
+                  saving={rowSt[d.id] === 'saving'} status={rowSt[d.id] || (forms[d.id] && isDirty(forms[d.id], d) ? 'dirty' : '')}
+                  onSave={() => leaveRow(d)} onCancel={() => revertRow(d)} onLeave={() => leaveRow(d)}
+                  picked={picked.includes(d.id)} onPick={() => pickOne(d.id)} pending={!isApproved(d)}
+                  paper={<DocFiles row={{ id: `company_docs/${d.id}`, owner: d.party, doc_name: d.doc_no, files: d.files || [] }}
+                    canEdit userName={me} flash={flash}
+                    onSave={(files) => savePapers(d, files)} />}
+                  verify={<BillVerify d={d} list={list} canVerify={canVerifyBill(U, d.company)} me={me} flash={flash} onChanged={load} />} />
+              ) : (
+                <tr key={d.id} data-id={d.id} tabIndex={0} className={`${picked.includes(d.id) ? 'dx-on' : ''}${kind === 'receipt' && !isApproved(d) ? ' bv-pend' : ''}`} onClick={() => kind !== 'receipt' && openDoc(d)} onKeyDown={(e) => e.key === 'Enter' && kind !== 'receipt' && openDoc(d)}
+                  title={kind === 'receipt' ? '' : 'Open'} style={kind === 'receipt' && !canEdit ? { cursor: 'default' } : undefined}>
+                  {canEdit && <td className="dx-c" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${d.doc_no}`} checked={picked.includes(d.id)} onChange={() => pickOne(d.id)} /></td>}
+                  {kind === 'receipt' && (
+                    <td className="bv-keep" onClick={(e) => e.stopPropagation()}>
+                      <DocFiles row={{ id: `company_docs/${d.id}`, owner: d.party, doc_name: d.doc_no, files: d.files || [] }}
+                        canEdit={canEdit} userName={me} flash={flash}
+                        onSave={(files) => savePapers(d, files)} />
+                    </td>
+                  )}
+                  {kind === 'receipt' && <td className="bv-keep"><BillVerify d={d} list={list} canVerify={canVerifyBill(U, d.company)} me={me} flash={flash} onChanged={load} /></td>}
+                  <td className="iv-list-no">{d.doc_no}{(d.files || []).length ? ' 📎' : ''}</td>
+                  <td>{fmtD(d.doc_date)}</td>
+                  <td>{d.party}</td>
+                  {(() => { const x = shortOf(d); return (<>
+                    <td className="dx-rno">{x.receipt_no}</td>
+                    <td>{x.vehicle_no}</td>
+                    <td>{x.fuel ? <span className={`dx-fuel f-${x.fuel.toLowerCase()}`}>{x.fuel}</span> : ''}</td>
+                    {(() => { const fg = billFig(d); return (<>
+                      <td className="num">{fg.sub === null ? '' : <Omr v={fg.sub} />}</td>
+                      <td className="num">{fg.vat > 0 ? <Omr v={fg.vat} /> : <span className="muted">0</span>}</td>
+                    </>); })()}
+                    <td className="num dx-grand"><Omr v={totalOf(d)} /></td>
+                    <td className="muted">{x.vat_no}</td>
+                  </>); })()}
+                  {kind === 'receipt' && <td>{d.department || ''}</td>}
+                  {xcols.map((c) => <td key={c.key}>{(d.extra || {})[c.key] || ''}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {kind === 'receipt' && <>
+            <datalist id="br-party">{sugg.auto.party.map((x) => <option key={x} value={x} />)}</datalist>
+            <datalist id="br-veh">{sugg.auto.vehicle_no.map((x) => <option key={x} value={x} />)}</datalist>
+            <datalist id="br-vatno">{sugg.auto.vat_no.map((x) => <option key={x} value={x} />)}</datalist>
+          </>}
+        </div>
+      )}
+
+
+      {colsOpen && kind === 'receipt' && canEdit && (
+        <BillColumns cfg={colCfg} busy={colBusy || busy} onChange={changeCols} onClose={() => setColsOpen(false)}
+          onUndo={doUndo} canUndo={undo.length > 0} />
+      )}
+
+      {bulk && (() => {
+        const rows = (list || []).filter((d) => picked.includes(d.id));
+        const names = rows.slice(0, 8).map((d) => <li key={d.id}><b>{d.doc_no}</b> · {fmtD(d.doc_date)} · {d.party} · {r3(totalOf(d)).toFixed(3)}</li>);
+        return bulk.act === 'delete' ? (
+          <Modal title={`Delete ${rows.length} ${rows.length === 1 ? K.one.toLowerCase() : K.label.toLowerCase()}?`} onClose={() => !busy && setBulk(null)}>
+            <ul className="dx-list">{names}{rows.length > 8 && <li>... and {rows.length - 8} more</li>}</ul>
+            {kind === 'receipt' && <p className="muted" style={{ margin: 0 }}>Their lines in All Companies are removed too, with the attached papers.</p>}
+            <div className="modal-actions">
+              <button className="btn ghost" onClick={() => setBulk(null)} disabled={busy}>Cancel</button>
+              <button className="btn danger" onClick={bulkDelete} disabled={busy}>{busy ? 'Deleting...' : '🗑 Delete'}</button>
+            </div>
+          </Modal>
+        ) : (
+          <Modal title={`Move ${rows.length} ${rows.length === 1 ? K.one.toLowerCase() : K.label.toLowerCase()}`} onClose={() => !busy && setBulk(null)}>
+            <ul className="dx-list">{names}{rows.length > 8 && <li>... and {rows.length - 8} more</li>}</ul>
+            <div className="dx-to">
+              <span>Move to type</span>
+              <div className="dx-kinds">
+                {Object.entries(KINDS).map(([k, v]) => (
+                  <button key={k} type="button" className={`rp-chip ${bulk.toKind === k ? 'active' : ''}`} onClick={() => setBulk({ ...bulk, toKind: k })}>
+                    {k === 'invoice' ? '🧾' : '💵'} {v.label}{k === kind ? ' (now)' : ''}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <label className="dx-to"><span>Move to company</span>
+              <select value={bulk.to} onChange={(e) => setBulk({ ...bulk, to: e.target.value })}>
+                {coChoices.map((c) => <option key={c.key} value={c.key} disabled={!c.mine}>{c.short}{c.key === co ? ' (now)' : ''}{c.mine ? '' : ' (no access)'}</option>)}
+              </select>
+            </label>
+            {bulk.to === co && bulk.toKind === kind ? <p className="di-warn">Pick another type or another company.</p> : (
+              <p className="muted" style={{ margin: 0 }}>
+                They get the next number there ({KINDS[bulk.toKind].prefix}-{CO_CODE[bulk.to] || 'X'}-...).
+                {bulk.toKind === 'receipt' && kind !== 'receipt' && <> As bills they are added to <b>{companyOf(bulk.to).short}</b> expenses in All Companies.</>}
+                {bulk.toKind !== 'receipt' && kind === 'receipt' && <> As invoices they are removed from All Companies expenses.</>}
+                {bulk.toKind === 'receipt' && kind === 'receipt' && bulk.to !== co && <> Their expense lines move to <b>{companyOf(bulk.to).short}</b> too.</>}
+              </p>
+            )}
+            <div className="modal-actions">
+              <button className="btn ghost" onClick={() => setBulk(null)} disabled={busy}>Cancel</button>
+              <button className="btn" onClick={() => bulkMove(bulk.to, bulk.toKind)} disabled={busy || (bulk.to === co && bulk.toKind === kind)}>{busy ? 'Moving...' : '↔ Move'}</button>
+            </div>
+          </Modal>
+        );
+      })()}
+      {toast && <div className={`toast ${toast.kind}`} role="status">{toast.text}</div>}
+    </>
+  );
+}
+
+export default function Page() {
+  return <AuthGate wide><DocsPage /></AuthGate>;
+}

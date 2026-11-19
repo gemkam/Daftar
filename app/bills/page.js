@@ -1,0 +1,204 @@
+'use client';
+
+import RangeReport from '@/components/RangeReport';
+import { billsReport } from '@/lib/rangeReports';
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import AuthGate, { useUser } from '@/components/AuthGate';
+import Modal from '@/components/Modal';
+import { invCoFromUrl, byCo, invHome } from '@/lib/inventoryCo';
+import { sb, fmtOMR, fmtDate } from '@/lib/supabase';
+import Omr from '@/components/Omr';
+import DateInput from '@/components/DateInput';
+import DataGrid from '@/components/DataGrid';
+import EditToggle from '@/components/EditToggle';
+import { fmtAmt } from '@/lib/sheet';
+
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function BillsPage() {
+  const { isAdmin, canDelete } = useUser() || {};
+  const [editMode, setEditMode] = useState(false);
+  const [accounts, setAccounts] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [error, setError] = useState('');
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [filter, setFilter] = useState('all');
+  const [del, setDel] = useState(null);
+  const [form, setForm] = useState({ account_id: '', amount: '', paid_on: today(), period: '', note: '' });
+
+  const [co] = useState(invCoFromUrl); // own inventory of a company (lib/inventoryCo.js)
+  const load = useCallback(async () => {
+    const s = sb();
+    const [a, p] = await Promise.all([
+      byCo(s.from('bill_accounts').select('*'), co).order('sort').order('name'),
+      s.from('bill_payments').select('*, bill_accounts(name, payment_type, company)').order('paid_on', { ascending: false }).order('created_at', { ascending: false }).limit(1000)
+    ]);
+    if (a.error || p.error) setError((a.error || p.error).message);
+    setAccounts(a.data || []);
+    setPayments((p.data || []).filter((x) => (x.bill_accounts?.company || '') === co).slice(0, 300));
+    setForm((f) => ({ ...f, account_id: f.account_id || a.data?.[0]?.id || '' }));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function flash(text) { setMsg(text); setTimeout(() => setMsg(''), 2500); }
+
+  async function addPayment(e) {
+    e.preventDefault();
+    setBusy(true); setError('');
+    const { error } = await sb().from('bill_payments').insert({
+      account_id: form.account_id,
+      amount: Number(form.amount),
+      paid_on: form.paid_on,
+      period: form.period.trim() || null,
+      note: form.note.trim() || null
+    });
+    setBusy(false);
+    if (error) { setError(error.message); return; }
+    setForm({ ...form, amount: '', period: '', note: '' });
+    flash('Payment saved');
+    load();
+  }
+
+  /* ✏️ Edit: change any saved payment in the table (4 Nov 2026) */
+  async function savePayment(row, key, value) {
+    let patch;
+    if (key === 'bill') {
+      const acc = accounts.find((a) => a.name === value);
+      if (!acc) { setError('Pick a bill'); return; }
+      patch = { account_id: acc.id };
+    } else if (key === 'amount') patch = { amount: Number(value || 0) };
+    else patch = { [key]: value || null };
+    setError('');
+    const { error } = await sb().from('bill_payments').update(patch).eq('id', row.id);
+    if (error) { setError(error.message); load(); return; }
+    flash('Saved');
+    load();
+  }
+
+  async function confirmDelete() {
+    setBusy(true);
+    const { error } = await sb().from('bill_payments').delete().eq('id', del.id);
+    setBusy(false);
+    if (error) { setError(error.message); return; }
+    setDel(null);
+    flash('Payment deleted');
+    load();
+  }
+
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const thisMonth = payments.filter((p) => p.paid_on?.startsWith(monthKey));
+  const thisYear = payments.filter((p) => p.paid_on?.startsWith(String(now.getFullYear())));
+  const sum = (list) => list.reduce((t, p) => t + Number(p.amount), 0);
+  const shown = filter === 'all' ? payments : payments.filter((p) => p.account_id === filter);
+
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <Link href={invHome(co)} className="crumb">← Inventory</Link>
+          <h1>Bills</h1>
+          <p className="sub">Electricity, water, dispenser and internet payments</p>
+        </div>
+        <RangeReport title="Bills report" build={(from, to) => billsReport({ payments, from, to })} label="🖨 Report by dates" />
+      </div>
+
+      {error && <div className="error">{error}</div>}
+      {msg && <div className="ok-msg">{msg}</div>}
+
+      <div className="stats">
+        <div className="stat"><div className="label">This month</div><div className="value"><Omr v={sum(thisMonth)} /></div></div>
+        <div className="stat"><div className="label">This year</div><div className="value"><Omr v={sum(thisYear)} /></div></div>
+        {accounts.map((a) => {
+          const last = payments.find((p) => p.account_id === a.id);
+          return (
+            <div className="stat" key={a.id}>
+              <div className="label">{a.name}{a.payment_type ? ` (${a.payment_type})` : ''}</div>
+              <div className="value" style={{ fontSize: 18 }}>{last ? <Omr v={last.amount} /> : 'No payments'}</div>
+              {last && <div className="sub" style={{ fontSize: 13 }}>Last paid {fmtDate(last.paid_on)}</div>}
+            </div>
+          );
+        })}
+      </div>
+
+      {isAdmin && <section className="panel">
+        <h2>Add payment</h2>
+        <form className="form-row" onSubmit={addPayment}>
+          <div className="field">
+            <label htmlFor="bp-acc">Bill</label>
+            <select id="bp-acc" required value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })}>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}{a.payment_type ? ` (${a.payment_type})` : ''}</option>)}
+            </select>
+          </div>
+          <div className="field narrow">
+            <label htmlFor="bp-amt">Amount (OMR)</label>
+            <input id="bp-amt" type="number" min="0" step="0.001" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+          </div>
+          <div className="field narrow">
+            <label htmlFor="bp-date">Paid on</label>
+            <DateInput id="bp-date" required value={form.paid_on} onChange={(v) => setForm((x) => ({ ...x, paid_on: v }))} />
+          </div>
+          <div className="field narrow">
+            <label htmlFor="bp-period">For month</label>
+            <input id="bp-period" value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value })} placeholder="e.g. Oct 2026" />
+          </div>
+          <div className="field">
+            <label htmlFor="bp-note">Note</label>
+            <input id="bp-note" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Receipt no., top-up, etc." />
+          </div>
+          <button className="btn" type="submit" disabled={busy || !form.account_id}>Save payment</button>
+        </form>
+      </section>}
+
+      <section className="panel">
+        <div className="page-head">
+          <h2>Payment history</h2>
+          <div className="field narrow" style={{ flex: '0 1 200px' }}>
+            <label htmlFor="bp-filter">Show</label>
+            <select id="bp-filter" value={filter} onChange={(e) => setFilter(e.target.value)}>
+              <option value="all">All bills</option>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+        </div>
+        {isAdmin && <div className="tools" style={{ margin: '0 0 10px' }}><EditToggle show={isAdmin} on={editMode} onClick={() => setEditMode((v) => !v)} /></div>}
+        <DataGrid
+          rows={shown.map((p) => ({ ...p, bill: p.bill_accounts?.name || '' }))}
+          canEdit={isAdmin && editMode}
+          onSave={savePayment}
+          onDelete={canDelete ? (r) => setDel(r) : undefined}
+          emptyText="No payments recorded yet."
+          flash={(t) => setError(t)}
+          footer={{ paid_on: 'Total', amount: fmtAmt(sum(shown)) }}
+          columns={[
+            { key: 'paid_on', label: 'Paid on', type: 'date', width: 124, render: (r) => fmtDate(r.paid_on) },
+            { key: 'bill', label: 'Bill', type: 'select', width: 190, options: accounts.map((a) => a.name) },
+            { key: 'period', label: 'For month', type: 'text', width: 120 },
+            { key: 'amount', label: 'Amount', type: 'number', min: 0, width: 120, render: (r) => <Omr v={r.amount} /> },
+            { key: 'note', label: 'Note', type: 'text', width: 260 }
+          ]}
+        />
+      </section>
+
+      {del && (
+        <Modal title="Delete payment?" onClose={() => setDel(null)}>
+          <p style={{ margin: 0 }}>Delete the {del.bill_accounts?.name} payment of {fmtOMR(del.amount)} on {fmtDate(del.paid_on)}?</p>
+          <div className="modal-actions">
+            <button className="btn ghost" onClick={() => setDel(null)}>Cancel</button>
+            <button className="btn danger" onClick={confirmDelete} disabled={busy}>Delete</button>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+export default function Page() {
+  return <AuthGate><BillsPage /></AuthGate>;
+}
