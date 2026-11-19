@@ -131,7 +131,12 @@ function FloatingClock({ count, ringing, onOpen }) {
   );
 }
 
-export default function AlertsPanel() {
+function mobileOS() {
+  try { return document.documentElement.classList.contains('mobile-os'); } catch { return false; }
+}
+
+/* page: the 🔔 Alerts page (phones). On Android / iOS the Home page shows no alarm clock any more (19 Nov 2026) */
+export default function AlertsPanel({ page = false }) {
   const [all, setAll] = useState(null);
   const [closed, setClosed] = useState(new Set());
   const [useLocal, setUseLocal] = useState(false);
@@ -155,6 +160,8 @@ export default function AlertsPanel() {
   useEffect(() => { try { setMini(localStorage.getItem('tudo-alerts-min') === '1'); } catch { /* ignore */ } }, []);
   const toggleMini = () => setMini((m) => { const n = !m; try { localStorage.setItem('tudo-alerts-min', n ? '1' : '0'); } catch { /* ignore */ } return n; });
   const [phone, setPhone] = useState(false);
+  const [mob, setMob] = useState(false);
+  useEffect(() => { setMob(mobileOS()); }, []);
   useEffect(() => {
     let mq; try { mq = window.matchMedia('(max-width: 760px)'); } catch { return undefined; }
     const f = () => setPhone(isPhone()); f();
@@ -251,11 +258,13 @@ export default function AlertsPanel() {
 
   const when = (a) => (a.left === null || a.left === undefined ? (a.date ? `entered ${fmtD(a.date)}` : '') : whenText(a.left));
 
+  if (!page && mob) return null; // Android / iOS: alerts live in the 🔔 Alerts button of the top bar
+  const sheet = phone && !page;
   return (
     <>
-    {phone && !mobOpen && <FloatingClock count={open.length} ringing={urgent.length > 0} onOpen={() => setMobOpen(true)} />}
-    {phone && mobOpen && <div className="al-sheet-back" onClick={() => setMobOpen(false)} aria-hidden="true" />}
-    <aside className={`alerts-col ${urgent.length ? 'has-urgent' : ''} ${mobOpen ? 'mob-open' : ''} ${mini && !phone ? 'min' : ''}`} aria-label="Alerts">
+    {sheet && !mobOpen && <FloatingClock count={open.length} ringing={urgent.length > 0} onOpen={() => setMobOpen(true)} />}
+    {sheet && mobOpen && <div className="al-sheet-back" onClick={() => setMobOpen(false)} aria-hidden="true" />}
+    <aside className={`alerts-col ${page ? 'al-page' : ''} ${urgent.length ? 'has-urgent' : ''} ${mobOpen && !page ? 'mob-open' : ''} ${mini && !phone && !page ? 'min' : ''}`} aria-label="Alerts">
       <div className="al-head">
         <button type="button" className="al-clock-btn" onClick={(e) => { if (isPhone()) return; e.stopPropagation(); if (urgent.length) setPopup(true); }}
           title={urgent.length ? 'Show urgent alerts' : 'No urgent alerts'} aria-label="Show urgent alerts"
@@ -266,8 +275,8 @@ export default function AlertsPanel() {
           <h2>Alerts {all && <span className="al-count">{open.length}</span>}</h2>
           <p>{all === null ? 'Checking...' : urgent.length ? `${urgent.length} need attention now` : open.length ? 'Tap × to close one' : 'Nothing needs attention'}</p>
         </div>
-        <button type="button" className="al-chev" onClick={() => setMobOpen(false)} aria-label="Close alerts">✕</button>
-        {!phone && (
+        {!page && <button type="button" className="al-chev" onClick={() => setMobOpen(false)} aria-label="Close alerts">✕</button>}
+        {!phone && !page && (
           <button type="button" className="al-min" onClick={toggleMini} aria-expanded={!mini}
             title={mini ? 'Open the alerts' : 'Minimize the alerts'} aria-label={mini ? 'Open the alerts' : 'Minimize the alerts'}>
             {mini ? '▢' : '−'}
@@ -282,6 +291,7 @@ export default function AlertsPanel() {
         <button type="button" role="tab" aria-selected={tab === 'double'} className={tab === 'double' ? 'on' : ''} onClick={() => setTab('double')}>
           🔁 Double work {dw && dw.length > 0 && <span className="al-tn dw">{dw.length}</span>}
         </button>
+        {page && <Link href="/docs" className="al-tab-link">📋 Checklist</Link>}
       </div>
 
       {tab === 'double' && <DoubleWorkList list={dw} />}
