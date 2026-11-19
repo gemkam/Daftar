@@ -83,7 +83,7 @@ function hasMaleVoice(lang) {
   const all = window.speechSynthesis?.getVoices() || [];
   if (!all.length) return null;
   const L = (v) => (v.lang || '').toLowerCase().replace('_', '-');
-  const pre = { ru: ['en', 'hi', 'ur'], ur: ['ur', 'hi'], ar: ['ar'], en: ['en'] }[lang] || ['en'];
+  const pre = { ru: ['en', 'hi', 'ur'], ur: ['ur', 'ar'], ar: ['ar'], en: ['en'] }[lang] || ['en'];
   return all.some((v) => pre.some((w) => L(v).startsWith(w)) && MALE.test(v.name) && !FEMALE.test(v.name));
 }
 
@@ -111,7 +111,7 @@ function bestVoice(lang, wantMale = true) {
   };
   const WANT = {
     ru: ['en-in', 'hi-in', 'ur', 'en-gb', 'en-us'],
-    ur: ['ur-pk', 'ur-in', 'ur', 'hi-in'],
+    ur: ['ur-pk', 'ur-in', 'ur', 'ar-sa', 'ar-ae', 'ar-om', 'ar'], // no Urdu voice (Chrome on PC): an Arabic voice still reads the letters
     ar: ['ar-om', 'ar-ae', 'ar-sa', 'ar-qa', 'ar-kw', 'ar-bh', 'ar'],
     en: ['en-gb', 'en-us', 'en-in', 'en']
   };
@@ -303,7 +303,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
   };
   const greet = asPersona(greeting?.[lang] || greeting?.en || '', lang, P);
   const pName = P.name[lang] || P.name.en;
-  function choose(w) { if (w === 'faisal' && maleOk === false) return; if (w === who) return; stopAll(); setTalk(false); setWho(w); try { localStorage.setItem(PERSONA_KEY, w); } catch { /* ignore */ } }
+  function choose(w) { if (w === 'faisal' && maleOk === false) return; if (w === who) return; stopAll(); setTalk(false); setWho(w); try { localStorage.setItem(PERSONA_KEY, w); } catch { /* ignore */ } greetAgain(lang, PERSONAS[w]); }
 
   /* ---------- load and save ---------- */
   useEffect(() => {
@@ -571,11 +571,19 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
     startListening(true);
   }
 
+  /* Say the greeting again in the new language / with the new person (the click lets the browser speak) */
+  function greetAgain(l, p) {
+    if (!open || !voiceOn) return;
+    live.current.lang = l; live.current.P = p;
+    setTimeout(() => speak(asPersona(greeting?.[l] || greeting?.en || '', l, p), -2), 60);
+  }
+
   function changeLang(l) {
     if (l === lang) return;
     stopAll();
     setTalk(false);
     setLang(l);
+    greetAgain(l, P);
   }
 
   async function copy(text, i) {
