@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { isRightPassword } from '@/lib/editLock';
+import { isRightPassword, NO_PASSWORDS } from '@/lib/editLock';
 
 /* 🔒 Company password (Owner, 9 Nov 2026): same password as Edit / Admin.
    The company opens the moment the right password is typed (no Enter needed).
@@ -11,6 +11,8 @@ export default function CompanyLock({ company, onOpen, onCancel, inline = false 
   const [err, setErr] = useState('');
   const ref = useRef(null);
   useEffect(() => { const t = setTimeout(() => ref.current?.focus(), 30); return () => clearTimeout(t); }, []);
+  useEffect(() => { if (NO_PASSWORDS) onOpen?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (NO_PASSWORDS) return null; // Daftar: no company password
 
   async function typed(v) {
     setVal(v); setErr('');
