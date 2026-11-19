@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFaisalAvatar } from '@/lib/faisalAvatar';
 import FaisalAvatarEditor from '@/components/FaisalAvatarEditor';
 import { sb } from '@/lib/supabase';
+import { pageIntro } from '@/lib/pageIntro';
 
 const SILENCE_MS = 3000;
 const NO_SPEECH_MS = 12000;
@@ -300,6 +301,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
   const drag = useRef(null);
   const live = useRef({});
   const greeted = useRef(false);
+  const introPage = useRef(''); // 🗣 page whose intro was already given
   useEffect(() => {
     const check = () => setMaleOk(hasMaleVoice(lang));
     check();
@@ -329,7 +331,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
       else { try { if (localStorage.getItem('daftar-ui-lang') === 'ar') setLang('ar'); } catch { /* ignore */ } }
       if (typeof s?.voiceOn === 'boolean') setVoiceOn(s.voiceOn);
       const c = JSON.parse(localStorage.getItem(CHAT_KEY) || 'null');
-      if (Array.isArray(c)) setMsgs(c.filter((m) => !m.error).slice(-20).map((m) => ({ ...m, fresh: false })));
+      if (Array.isArray(c)) setMsgs(c.filter((m) => !m.error && !m.intro).slice(-20).map((m) => ({ ...m, fresh: false })));
       const p = JSON.parse(localStorage.getItem(POS_KEY) || 'null');
       if (p && Number.isFinite(p.x)) setPos(clampPos(p));
       if (!localStorage.getItem('noor-hint')) { setHint(true); localStorage.setItem('noor-hint', '1'); setTimeout(() => setHint(false), 7000); }
@@ -339,7 +341,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
   }, []);
 
   useEffect(() => { try { localStorage.setItem(SET_KEY, JSON.stringify({ lang, voiceOn })); } catch { /* ignore */ } }, [lang, voiceOn]);
-  useEffect(() => { try { localStorage.setItem(CHAT_KEY, JSON.stringify(msgs.filter((m) => !m.error).slice(-20).map(({ fresh, ...m }) => m))); } catch { /* ignore */ } }, [msgs]);
+  useEffect(() => { try { localStorage.setItem(CHAT_KEY, JSON.stringify(msgs.filter((m) => !m.error && !m.intro).slice(-20).map(({ fresh, ...m }) => m))); } catch { /* ignore */ } }, [msgs]);
 
   const scrollDown = useCallback(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, []);
   useEffect(() => { scrollDown(); }, [msgs, mode, open, scrollDown]);
@@ -420,9 +422,33 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
       greeted.current = true;
       setTalk(true);
       live.current.talk = true;
-      speak(asPersona(greeting?.[lang] || greeting?.en || '', live.current.lang, live.current.P), -2, () => { if (live.current.talk) setTimeout(() => startListening(true), 400); });
+      const intro = showIntro();
+      const hello = asPersona(greeting?.[lang] || greeting?.en || '', live.current.lang, live.current.P);
+      speak(intro ? `${hello} ${asPersona(intro, live.current.lang, live.current.P)}` : hello, -2, () => { if (live.current.talk) setTimeout(() => startListening(true), 400); });
     } else { stopAll(); setTalk(false); }
   }
+
+  /* 🗣 Page intro (Kamran 19 Nov 2026): when the page changes, say in one line what this page is (lib/pageIntro.js).
+     Shown as a bubble (not saved, not sent to the AI); the previous intro bubble is replaced. */
+  function showIntro() {
+    const pth = String(live.current.page || '/');
+    const txt = pageIntro(pth, live.current.lang);
+    if (!txt || introPage.current === pth) return '';
+    introPage.current = pth;
+    setMsgs((m) => {
+      const keep = m.length && m[m.length - 1].intro ? m.slice(0, -1) : m;
+      return [...keep, { role: 'assistant', content: asPersona(txt, live.current.lang, live.current.P), intro: true, fresh: true }];
+    });
+    return txt;
+  }
+  useEffect(() => {
+    if (!open) return;
+    const txt = showIntro();
+    if (!txt || !live.current.voiceOn || live.current.mode === 'thinking') return;
+    stopListening();
+    speak(asPersona(txt, live.current.lang, live.current.P), -3, () => { if (live.current.talk) setTimeout(() => startListening(true), 400); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   /* ---------- speaking (male voice) ---------- */
   function stopSpeaking() {
@@ -563,7 +589,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
       const res = await fetch('/api/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session?.access_token || ''}` },
-        body: JSON.stringify({ scope: 'group', persona: live.current.P.key, lang: live.current.lang, context: live.current.context, page: live.current.page, messages: next.filter((m) => !m.error).slice(-8).map(({ role, content }) => ({ role, content })) })
+        body: JSON.stringify({ scope: 'group', persona: live.current.P.key, lang: live.current.lang, context: live.current.context, page: live.current.page, messages: next.filter((m) => !m.error && !m.intro).slice(-8).map(({ role, content }) => ({ role, content })) })
       });
       const out = await res.json().catch(() => ({}));
       if (!res.ok) { if (res.status === 401) throw new Error(out.error || 'Please log in again.'); console.warn('assistant:', out.error); throw new Error(TXT[live.current.lang]?.busy || TXT.en.busy); }
