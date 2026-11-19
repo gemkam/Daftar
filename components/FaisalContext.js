@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect } from 'react';
+import { timeHello } from '@/lib/hello';
 
 /*
   Faisal (the AI assistant) lives in AuthGate, so he is on every page.
@@ -16,15 +17,13 @@ export function useFaisalPage({ context = '', greeting = null, alertCount = 0 } 
   useEffect(() => () => setPageAi(null), [setPageAi]);
 }
 
-/* Greeting used on pages that do not give their own */
+/* Greeting used on pages that do not give their own (time of day in Muscat, "from Daftar app") */
 export function defaultGreeting(name) {
-  const h = Number(new Date().toLocaleString('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Asia/Muscat' }));
-  const part = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
   const who = name ? ` ${name}` : '';
   return {
-    en: `${part}${who}! I am Faisal, your assistant for the whole Daftar Office System: alerts, payments to make and collect, transport, office expenses, invoices and inventory. How can I help you? Please go ahead, I am listening.`,
-    ru: `Assalam o Alaikum${who}! Main Faisal hoon, poore Daftar Office System ka assistant: alerts, payments, transport, office kharcha, invoices aur inventory. Main aap ki kya madad kar sakta hoon? Boliye, main sun raha hoon.`,
-    ur: `السلام علیکم${who}! میں فیصل ہوں، پورے دفتر آفس سسٹم کا اسسٹنٹ: الرٹس، ادائیگیاں، ٹرانسپورٹ، دفتر کا خرچہ، انوائسز اور انوینٹری۔ میں آپ کی کیا مدد کر سکتا ہوں؟ بولیے، میں سن رہا ہوں۔`,
-    ar: `${h < 12 ? 'صباح الخير' : 'مساء الخير'}${who}! أنا فيصل، مساعدك في كل نظام دفتر: التنبيهات، الفلوس اللي عليك واللي لك، النقل، مصاريف المكتب، الفواتير والمخزون. شو أقدر أسوي لك؟ تفضّل، أنا أسمعك.`
+    en: `${timeHello('en')}${who}! I am Faisal from Daftar app, your assistant for alerts, payments to make and collect, transport, office expenses, invoices and inventory. How can I help you? Please go ahead, I am listening.`,
+    ru: `${timeHello('ru')}${who}! Main Daftar app se Faisal hoon, aap ka assistant: alerts, payments, transport, office kharcha, invoices aur inventory. Main aap ki kya madad kar sakta hoon? Boliye, main sun raha hoon.`,
+    ur: `${timeHello('ur')}${who}! میں دفتر ایپ سے فیصل ہوں، آپ کا اسسٹنٹ: الرٹس، ادائیگیاں، ٹرانسپورٹ، دفتر کا خرچہ، انوائسز اور انوینٹری۔ میں آپ کی کیا مدد کر سکتا ہوں؟ بولیے، میں سن رہا ہوں۔`,
+    ar: `${timeHello('ar')}${who}! أنا فيصل من برنامج دفتر، مساعدك في التنبيهات، الفلوس اللي عليك واللي لك، النقل، مصاريف المكتب، الفواتير والمخزون. شو أقدر أسوي لك؟ تفضّل، أنا أسمعك.`
   };
 }
