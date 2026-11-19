@@ -22,9 +22,11 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" translate="no" className="notranslate" suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#13836b" />
+        {/* Daftar has its own English / Arabic switch: stop Chrome "Translate this page" from translating it back */}
+        <meta name="google" content="notranslate" />
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
         {/* Opening animation: hide it at once if it already played in this tab (components/IntroSplash.js) */}
         <script dangerouslySetInnerHTML={{ __html: INTRO_BOOT }} />
