@@ -11,7 +11,7 @@ import { isRightPassword } from '@/lib/editLock';
   ＋ adds a new designation, straight away (no password in Daftar).
   Options: app_settings key "designations" (JSON list). The user's designation: table user_designations.
 */
-export const DEFAULT_DESIGNATIONS = ['Employee', 'CEO', 'Chairman', 'Partner'];
+export const DEFAULT_DESIGNATIONS = ['Employee', 'CEO', 'General Manager', 'Partner'];
 const KEY = 'designations';
 
 export async function loadDesignations() {

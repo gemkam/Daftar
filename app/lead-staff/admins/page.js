@@ -10,9 +10,9 @@ function AdminsPage() {
   const list = adminsFor(user);
   return (
     <>
-      <h1>🛡 Admins</h1>
+      <h1>🛡 Secretaries</h1>
       <p className="sub">Bill verifiers and app administrators.</p>
-      {list.length === 0 ? <p className="empty">This page is only for the admins and the Administrator.</p> : (
+      {list.length === 0 ? <p className="empty">This page is only for the secretaries and the Administrator.</p> : (
         <div className="adm-grid">
           {list.map((a) => a.href && canEnterLead(user, a.username) ? (
             <Link key={a.key} href={a.href} className="adm-tile">

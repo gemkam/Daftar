@@ -105,13 +105,13 @@ function Approvals() {
   const allOn = shown.length > 0 && picked.length === shown.length;
   const tickAll = () => setSel(allOn ? [] : shown.map((d) => d.id));
 
-  if (!c) return <p className="empty">Chairman not found. <Link href="/chairman">Back to Chairman</Link></p>;
-  if (!c.approvals || !canOpenChairman(user, c.key) || !canEnterLead(user, c.username)) return <p className="empty">Approvals are only for the chairmen.</p>;
+  if (!c) return <p className="empty">General Manager not found. <Link href="/chairman">Back to General Manager</Link></p>;
+  if (!c.approvals || !canOpenChairman(user, c.key) || !canEnterLead(user, c.username)) return <p className="empty">Approvals are only for the general managers.</p>;
 
   return (
     <>
       <h1>✅ Approvals</h1>
-      <p className="sub">{c.name} · {c.co ? 'Co-chairman' : 'Chairman'} · Bills verified by Faisal / Hamad{!canAct ? ` · Only ${c.name} can press the buttons` : ''}</p>
+      <p className="sub">{c.name} · {c.co ? 'Deputy General Manager' : 'General Manager'} · Bills verified by Faisal / Hamad{!canAct ? ` · Only ${c.name} can press the buttons` : ''}</p>
 
       <div className="co-switch no-print" role="tablist" aria-label="Approvals">
         {TABS.map(([k, label]) => (
@@ -157,7 +157,7 @@ function Approvals() {
             <thead>
               <tr>
                 {ticks && <th className="ap-first"><label className="ap-tick"><input type="checkbox" checked={allOn} onChange={tickAll} aria-label="Select all" /> Approve</label></th>}
-                <th>Bill paper</th><th>Company</th><th>No.</th><th>Date</th><th>Paid to</th><th>Receipt No.</th><th>Vehicle No.</th><th>Amount</th><th>Verified by</th><th>{tab === 'wait' ? 'Chairman' : tab === 'approved' ? 'Approved' : 'Rejected'}</th>
+                <th>Bill paper</th><th>Company</th><th>No.</th><th>Date</th><th>Paid to</th><th>Receipt No.</th><th>Vehicle No.</th><th>Amount</th><th>Verified by</th><th>{tab === 'wait' ? 'General Manager' : tab === 'approved' ? 'Approved' : 'Rejected'}</th>
               </tr>
             </thead>
             <tbody>
