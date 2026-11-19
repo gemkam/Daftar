@@ -2,6 +2,8 @@ import './globals.css';
 import { THEME_BOOT } from '@/lib/theme';
 import IntroSplash from '@/components/IntroSplash';
 import { INTRO_BOOT } from '@/lib/intro';
+import { UI_LANG_BOOT } from '@/lib/uiLang';
+import UiTranslator from '@/components/UiTranslator';
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&display=swap';
 
@@ -26,6 +28,8 @@ export default function RootLayout({ children }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
         {/* Opening animation: hide it at once if it already played in this tab (components/IntroSplash.js) */}
         <script dangerouslySetInnerHTML={{ __html: INTRO_BOOT }} />
+        {/* App language: Arabic turns the page right-to-left before it paints (lib/uiLang.js) */}
+        <script dangerouslySetInnerHTML={{ __html: UI_LANG_BOOT }} />
         {/* Phone with Chrome "Desktop site" switched on: the page is laid out 980px wide and looks tiny.
             Scale it up to the phone's real width so text stays readable (31 Oct 2026).
             1 Nov 2026: also caught when Chrome reports the desktop width as the screen width (page shown shrunk). */}
@@ -44,6 +48,7 @@ export default function RootLayout({ children }) {
         <div className="watermark" aria-hidden="true" />
         <div className="content">{children}</div>
         <IntroSplash />
+        <UiTranslator />
       </body>
     </html>
   );

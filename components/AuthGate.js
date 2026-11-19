@@ -18,6 +18,7 @@ import { loadAddedCompanies } from '@/lib/expenses';
 import FaisalAssistant from '@/components/NoorAssistant';
 import { FaisalCtx, defaultGreeting } from '@/components/FaisalContext';
 import ThemeMenu from '@/components/ThemeMenu';
+import LangSwitch from '@/components/LangSwitch';
 import OfficeTabs from '@/components/OfficeTabs';
 import BackToTop from '@/components/BackToTop';
 import EditPasswordHost from '@/components/EditPasswordHost';
@@ -227,6 +228,7 @@ export default function AuthGate({ children, adminOnly = false, ownerOnly = fals
                   <Ico name={ico} /><span>{label}</span>
                 </Link>
               ))}
+              <LangSwitch />
               <ThemeMenu />
               <AccountMenu user={user} onLogout={switchUser} showView={user.canRead && !user.isEntry} />
             </div>

@@ -51,7 +51,7 @@ export async function POST(req) {
         ]);
         rest = `=== TRANSPORT DETAIL ===\n${t.slice(0, 6000)}\n\n=== INVENTORY DETAIL ===\n${i.slice(0, 3000)}`;
       }
-      system = groupPrompt(`USER IS NOW ON PAGE: ${where || '/'}\n\n${watch}\n\n${rest}`, body.lang === 'ru' ? 'ru' : 'en');
+      system = groupPrompt(`USER IS NOW ON PAGE: ${where || '/'}\n\n${watch}\n\n${rest}`, ['ru', 'ur', 'ar'].includes(body.lang) ? body.lang : 'en');
     } else {
       const context = scope === 'transport' ? transportContext(await tData()) : inventoryContext(await iData());
       system = systemPrompt(scope, context);
