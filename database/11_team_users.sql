@@ -1,0 +1,6 @@
+-- 11 Company owner's users (19 Nov 2026, Kamran). APPLIED on Supabase as migration company_owner_team_users.
+-- A signed up company owner (app_metadata.self, no owner) and his Company administrators (cadmin) make logins
+-- for THEIR companies only: team_list_users(), team_save_user(...), team_delete_user(id); team_owner() finds the team.
+-- Team user app_metadata: role editor | viewer | entry, self true, owner = owner id, cadmin true/false.
+-- Trigger trg_team_add_company: team users cannot add companies (only the owner).
+-- Full SQL is in the Supabase migration history (list_migrations: company_owner_team_users).

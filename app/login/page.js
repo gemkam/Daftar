@@ -56,6 +56,7 @@ export default function LoginPage() {
         </div>
         <button className="btn" type="submit" disabled={busy}>{busy ? 'Logging in...' : 'Log in'}</button>
         <p className="login-alt">New to Daftar? <Link href="/signup">Create an account</Link></p>
+        <p className="login-alt" style={{ marginTop: 6 }}><Link href="/change-password">🔑 Change password</Link></p>
       </form>
     </div>
   );
