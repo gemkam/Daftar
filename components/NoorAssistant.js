@@ -322,7 +322,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
       else { try { if (localStorage.getItem('daftar-ui-lang') === 'ar') setLang('ar'); } catch { /* ignore */ } }
       if (typeof s?.voiceOn === 'boolean') setVoiceOn(s.voiceOn);
       const c = JSON.parse(localStorage.getItem(CHAT_KEY) || 'null');
-      if (Array.isArray(c)) setMsgs(c.slice(-20).map((m) => ({ ...m, fresh: false })));
+      if (Array.isArray(c)) setMsgs(c.filter((m) => !m.error).slice(-20).map((m) => ({ ...m, fresh: false })));
       const p = JSON.parse(localStorage.getItem(POS_KEY) || 'null');
       if (p && Number.isFinite(p.x)) setPos(clampPos(p));
       if (!localStorage.getItem('noor-hint')) { setHint(true); localStorage.setItem('noor-hint', '1'); setTimeout(() => setHint(false), 7000); }
@@ -332,7 +332,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
   }, []);
 
   useEffect(() => { try { localStorage.setItem(SET_KEY, JSON.stringify({ lang, voiceOn })); } catch { /* ignore */ } }, [lang, voiceOn]);
-  useEffect(() => { try { localStorage.setItem(CHAT_KEY, JSON.stringify(msgs.slice(-20).map(({ fresh, ...m }) => m))); } catch { /* ignore */ } }, [msgs]);
+  useEffect(() => { try { localStorage.setItem(CHAT_KEY, JSON.stringify(msgs.filter((m) => !m.error).slice(-20).map(({ fresh, ...m }) => m))); } catch { /* ignore */ } }, [msgs]);
 
   const scrollDown = useCallback(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, []);
   useEffect(() => { scrollDown(); }, [msgs, mode, open, scrollDown]);
