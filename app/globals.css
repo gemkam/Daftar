@@ -5137,3 +5137,4 @@ html.ui-ar .dx-intro { direction: ltr; }
 /* Assistant chooser: Faisal (man) / Samiya (woman) */
 .noor-who-pick { margin-top: 6px; }
 .noor-who-pick button { font-size: 12.5px; }
+.noor-who-pick button:disabled { opacity: .45; cursor: not-allowed; }
