@@ -8,7 +8,7 @@ import { isRightPassword } from '@/lib/editLock';
 /*
   Designation of a login (Owner 11 Nov 2026, Admin › Create users): Employee, CEO, Chairman, Partner.
   More than one can be ticked (some have two designations); saved as "CEO, Partner".
-  ＋ adds a new designation, ONLY after the password (728300, asked every time, also inside Admin).
+  ＋ adds a new designation, straight away (no password in Daftar).
   Options: app_settings key "designations" (JSON list). The user's designation: table user_designations.
 */
 export const DEFAULT_DESIGNATIONS = ['Employee', 'CEO', 'Chairman', 'Partner'];
@@ -71,15 +71,11 @@ export default function DesignationPick({ id, value, onChange }) {
             </label>
           ))}
         </div>
-        <button type="button" className="btn" onClick={() => setAdd({ pw: '', name: '', ok: false, err: '' })} title="Add a designation (password)">＋</button>
+        <button type="button" className="btn" onClick={() => setAdd({ pw: '', name: '', ok: true, err: '' })} title="Add a designation">＋</button>
       </div>
       {add && (
         <Modal title="＋ Add designation" onClose={() => setAdd(null)}>
           <form onSubmit={saveNew} style={{ display: 'grid', gap: 12 }}>
-            <div className="field">
-              <label htmlFor="dg-pw">Password</label>
-              <input id="dg-pw" type="password" inputMode="numeric" autoComplete="off" autoFocus value={add.pw} onChange={(e) => typedPw(e.target.value)} />
-            </div>
             {add.ok && (
               <div className="field">
                 <label htmlFor="dg-name">New designation</label>

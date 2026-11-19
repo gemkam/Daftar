@@ -47,7 +47,7 @@ function PowerSwitch() {
         </button>
         <div className="pw-state">
           <b>{on ? '⚡ ON: you can change the app' : 'OFF: nothing can be changed'}</b>
-          <span className="muted">{on ? 'Go to any page and tap a word, label or photo.' : 'Tap the switch to turn it on (edit password).'}</span>
+          <span className="muted">{on ? 'Go to any page and tap a word, label or photo.' : 'Tap the switch to turn it on.'}</span>
         </div>
       </div>
 

@@ -250,7 +250,7 @@ function CompanyAccess({ me }) {
   return (
     <>
       <h2 className="adm-h">👥 Users and their companies</h2>
-      <p className="sub">Tick the companies each user may open in All Companies. Administrators always open every company. The password is still asked.</p>
+      <p className="sub">Tick the companies each user may open in All Companies. Administrators always open every company.</p>
       {msg && <div className="error">{msg}</div>}
       <div className="table-wrap">
         <table className="adm-acc">
