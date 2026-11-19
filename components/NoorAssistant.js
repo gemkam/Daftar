@@ -78,6 +78,15 @@ function asPersona(text, lang, p) {
 const FEMALE = /(female|woman|aysha|amina|uzma|zariyah|fatima|laila|layla|amany|salma|hala|mouna|noura|sana|hoda|maryam|zira|aria|jenny|sonia|libby|hazel|susan|samantha|victoria|karen|moira|tessa|fiona|serena|veena|heera|neerja|kalpana|swara|lekha|ananya|aditi|raveena|salli|joanna|kendra|kimberly|ivy|emma|amy|natasha|ava|allison|michelle|nicky|catherine|clara|google uk english female|google us english|google हिन्दी|google english \(india\))/i;
 const MALE = /(\bmale\b|abdullah|hamed|fahed|naayf|asad|salman|bassel|hamdan|omar|taim|rami|maged|shakir|david|mark|george|ravi|hemant|prabhat|daniel|alex|fred|rishi|guy|ryan|madhur|thomas|james|william|brian|matthew|justin|joey|andrew|christopher|eric|roger|steffan|google uk english male)/i;
 
+/* true / false once the device voices are known, null while they are still loading */
+function hasMaleVoice(lang) {
+  const all = window.speechSynthesis?.getVoices() || [];
+  if (!all.length) return null;
+  const L = (v) => (v.lang || '').toLowerCase().replace('_', '-');
+  const pre = { ru: ['en', 'hi', 'ur'], ur: ['ur', 'hi'], ar: ['ar'], en: ['en'] }[lang] || ['en'];
+  return all.some((v) => pre.some((w) => L(v).startsWith(w)) && MALE.test(v.name) && !FEMALE.test(v.name));
+}
+
 function bestVoice(lang, wantMale = true) {
   const all = window.speechSynthesis?.getVoices() || [];
   const L = (v) => (v.lang || '').toLowerCase().replace('_', '-');
@@ -242,6 +251,8 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
   const [mode, setMode] = useState('idle');
   const [lang, setLang] = useState('en');
   const [who, setWho] = useState('faisal');
+  const [maleOk, setMaleOk] = useState(null); // does this phone / computer have a man's voice? (phones often do not)
+  const [voicesTick, setVoicesTick] = useState(0);
   const [voiceOn, setVoiceOn] = useState(true);
   const [talk, setTalk] = useState(false);
   const [pos, setPos] = useState(null);
@@ -266,7 +277,14 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
   const drag = useRef(null);
   const live = useRef({});
   const greeted = useRef(false);
-  const P = PERSONAS[who] || PERSONAS.faisal;
+  useEffect(() => {
+    const check = () => setMaleOk(hasMaleVoice(lang));
+    check();
+    const t1 = setTimeout(check, 800); const t2 = setTimeout(check, 2500); // phones load their voices late
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [lang, voicesTick]);
+  /* No man's voice on this device (most phones): Faisal would speak with a woman's voice, so Samiya speaks instead */
+  const P = maleOk === false ? PERSONAS.samiya : (PERSONAS[who] || PERSONAS.faisal);
   live.current = { msgs, lang, voiceOn, talk, context, mode, page, P };
   const base = TXT[lang] || TXT.en;
   const t = {
@@ -275,12 +293,12 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
   };
   const greet = asPersona(greeting?.[lang] || greeting?.en || '', lang, P);
   const pName = P.name[lang] || P.name.en;
-  function choose(w) { if (w === who) return; stopAll(); setTalk(false); setWho(w); try { localStorage.setItem(PERSONA_KEY, w); } catch { /* ignore */ } }
+  function choose(w) { if (w === 'faisal' && maleOk === false) return; if (w === who) return; stopAll(); setTalk(false); setWho(w); try { localStorage.setItem(PERSONA_KEY, w); } catch { /* ignore */ } }
 
   /* ---------- load and save ---------- */
   useEffect(() => {
     window.speechSynthesis?.getVoices();
-    if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); setVoicesTick((n) => n + 1); };
     try {
       const s = JSON.parse(localStorage.getItem(SET_KEY) || 'null');
       try { const w = localStorage.getItem(PERSONA_KEY); if (PERSONAS[w]) setWho(w); } catch { /* ignore */ }
@@ -603,7 +621,8 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
           </div>
           <div className="noor-lang noor-who-pick" role="group" aria-label="Assistant">
             {Object.values(PERSONAS).map((x) => (
-              <button key={x.key} type="button" className={who === x.key ? 'on' : ''} onClick={() => choose(x.key)} aria-pressed={who === x.key}>
+              <button key={x.key} type="button" className={P.key === x.key ? 'on' : ''} onClick={() => choose(x.key)} aria-pressed={P.key === x.key}
+                disabled={x.male && maleOk === false} title={x.male && maleOk === false ? 'This phone has no male voice' : ''}>
                 {x.male ? '👨' : '👩'} {x.name[lang] || x.name.en}
               </button>
             ))}
