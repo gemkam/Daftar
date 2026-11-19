@@ -194,16 +194,38 @@ function Avatar({ mode, uid, female = false }) {
 }
 
 let faceId = 0;
-function Face({ mode, size = 'big', pic, female = false }) {
+/* Neutral badge for the floating button (Daftar, 19 Nov 2026, Owner): "AI" with a spark, no name initial,
+   because the user can switch between Faisal and Samiya inside. */
+function AiBadge({ uid }) {
+  const g = (n) => `${n}-${uid}`;
+  return (
+    <svg className="noor-svg" viewBox="0 0 100 100" aria-hidden="true">
+      <defs>
+        <linearGradient id={g('ai')} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" style={{ stopColor: 'var(--brown-hover)' }} />
+          <stop offset="1" style={{ stopColor: 'var(--brown-deep)' }} />
+        </linearGradient>
+      </defs>
+      <circle cx="50" cy="50" r="50" fill={`url(#${g('ai')})`} />
+      <text x="47" y="62" textAnchor="middle" fontFamily="'Work Sans', Arial, sans-serif" fontWeight="800" fontSize="34" fill="#fff" letterSpacing="1">AI</text>
+      <path d="M74 24 L77 32 L85 35 L77 38 L74 46 L71 38 L63 35 L71 32 Z" fill="#f3d27a" />
+      <path d="M26 66 L27.6 70 L31.6 71.6 L27.6 73.2 L26 77.2 L24.4 73.2 L20.4 71.6 L24.4 70 Z" fill="#fff" opacity=".8" />
+    </svg>
+  );
+}
+
+function Face({ mode, size = 'big', pic, female = false, badge = false }) {
   const [uid] = useState(() => `nf${++faceId}`);
   return (
     <span className={`noor-face ${size} m-${mode}`} aria-hidden="true">
       <span className="noor-aura" />
       <span className="noor-ring" />
       <span className={`noor-core ${pic?.kind === 'photo' ? 'has-photo' : ''}`}>
-        {pic?.kind === 'photo'
-          ? <img className="noor-photo" src={pic.src} alt="" draggable="false" />
-          : <Avatar mode={mode} uid={uid} female={female} />}
+        {badge
+          ? <AiBadge uid={uid} />
+          : pic?.kind === 'photo'
+            ? <img className="noor-photo" src={pic.src} alt="" draggable="false" />
+            : <Avatar mode={mode} uid={uid} female={female} />}
       </span>
       {size === 'big' && <><span className="noor-spark s1" /><span className="noor-spark s2" /><span className="noor-spark s3" /></>}
       {mode === 'listening' && <><span className="noor-wave w1" /><span className="noor-wave w2" /><span className="noor-wave w3" /></>}
@@ -548,10 +570,10 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
         onPointerCancel={() => { drag.current = null; }}
         onKeyDown={onKeyDown}
         aria-expanded={open}
-        aria-label={open ? `Close ${P.name.en}, the AI assistant` : `Open ${P.name.en}, the AI assistant. Drag or use arrow keys to move.`}
-        title={`${P.name.en} · AI assistant (drag to move)`}
+        aria-label={open ? 'Close the AI assistant' : 'Open the AI assistant. Drag or use arrow keys to move.'}
+        title="AI assistant (drag to move)"
       >
-        <Face mode={mode} pic={P.male ? pic : { kind: 'drawn' }} female={!P.male} />
+        <Face mode={mode} badge />
         {!seen && alertCount > 0 && <span className="noor-badge">{alertCount}</span>}
         {hint && <span className="noor-hint">{t.hint}</span>}
       </button>
