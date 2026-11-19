@@ -186,7 +186,7 @@ function DocsPage() {
   const [del, setDel] = useState(false);
   const [q, setQ] = useState('');
   const [toast, setToast] = useState(null);
-  const [editing, setEditing] = useState(false); // ✏️ Edit (password 728300) -> Add, Delete, Move
+  const [editing, setEditing] = useState(false); // ✏️ Edit -> Add, Delete, Move
   const [picked, setPicked] = useState([]); // selected ids in Edit
   const [bulk, setBulk] = useState(null); // { act: 'delete' | 'move', to }
   const [busy, setBusy] = useState(false);

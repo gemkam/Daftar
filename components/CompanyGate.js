@@ -39,7 +39,7 @@ export function CompanyPicker({ co, gate, onPick, title = 'All Companies' }) {
   return (
     <div className="cg-wrap">
       <h1>🏢 {title}</h1>
-      <p className="sub">Choose a company. Each company opens with its password.</p>
+      <p className="sub">Choose a company.</p>
       {co && !allowed && <div className="error">You have no access to {COMPANIES.find((c) => c.key === co)?.short || 'this company'}. Ask the Administrator.</div>}
       {list.length === 0 ? (
         <p className="empty">No company is given to you yet. Ask the Administrator to give you access.</p>
