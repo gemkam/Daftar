@@ -51,6 +51,8 @@ const TXT = {
 /* Assistant languages (Daftar, 19 Nov 2026): English first, then Omani Arabic, Urdu script, Roman Urdu */
 const LANGS = [['en', 'English'], ['ar', 'العربية'], ['ur', 'اردو'], ['ru', 'Roman Urdu']];
 const SPEECH_LANG = { en: 'en-US', ar: 'ar-OM', ur: 'ur-PK', ru: 'en-IN' };
+// Voice (speaking) language when no voice is picked: phones know ar-SA, many do not know ar-OM
+const TTS_LANG = { en: 'en-US', ar: 'ar-SA', ur: 'ur-PK', ru: 'en-IN' };
 
 /* Two assistants (Daftar, 19 Nov 2026, Owner): Faisal (man) and Samiya (woman). The user picks one; saved on this device. */
 export const PERSONA_KEY = 'daftar-assistant';
@@ -422,6 +424,14 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
     const synth = window.speechSynthesis;
     stopSpeaking();
     if (!synth || !text) { then?.(); return; }
+    // Phones load their voices late: wait a moment once, then speak with the right (Arabic / Urdu) voice
+    if (!synth.getVoices().length && !speak.waited) {
+      speak.waited = true;
+      const go = () => { synth.removeEventListener?.('voiceschanged', go); clearTimeout(tm); speak(text, idx, then); };
+      const tm = setTimeout(go, 900);
+      synth.addEventListener?.('voiceschanged', go);
+      return;
+    }
     const my = ++run.current;
     const clean = String(text).replace(/[*_#`]/g, '').replace(/\bOMR\b/g, 'Rials').replace(/(\d),(\d{3})/g, '$1$2').replace(/%/g, ' percent').replace(/\bSamiya\b/g, 'Saa-mee-yah'); // say Samiya as Saa-mee-yah, not Samaya
     const parts = clean.split(/(?<=[.!?\n])\s+/).flatMap((p) => p.match(/.{1,170}(\s|$)/g) || [p]).map((p) => p.trim()).filter(Boolean);
@@ -432,7 +442,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
     setMode('speaking');
     parts.forEach((part, i) => {
       const u = new SpeechSynthesisUtterance(part);
-      if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = SPEECH_LANG[tl] || 'en-GB';
+      if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = TTS_LANG[tl] || 'en-GB';
       u.rate = 0.96;
       u.pitch = live.current.P.male ? (male ? 1 : 0.8) : (female ? 1 : 1.2); // deeper / higher if the right voice was not found
       if (i === parts.length - 1) {
