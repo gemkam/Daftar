@@ -5,6 +5,7 @@ import LangSwitch from '@/components/LangSwitch';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { sb } from '@/lib/supabase';
+import PwInput from '@/components/PwInput';
 
 // Usernames are mapped to internal login emails, e.g. "Nasser" -> nasser@daftar.local
 const DOMAIN = '@daftar.local';
@@ -52,7 +53,7 @@ export default function LoginPage() {
         </div>
         <div className="field">
           <label htmlFor="password">Password</label>
-          <input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          <PwInput id="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         <button className="btn" type="submit" disabled={busy}>{busy ? 'Logging in...' : 'Log in'}</button>
         <p className="login-alt">New to Daftar? <Link href="/signup">Create an account</Link></p>

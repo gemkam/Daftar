@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import LangSwitch from '@/components/LangSwitch';
 import { sb } from '@/lib/supabase';
+import PwInput from '@/components/PwInput';
 
 /*
   🙋 Sign up (19 Nov 2026, Kamran): anyone makes his own login (RPC public_signup, database/09_self_signup.sql).
@@ -57,11 +58,11 @@ export default function SignupPage() {
         </div>
         <div className="field">
           <label htmlFor="su-pw">Password</label>
-          <input id="su-pw" type="password" autoComplete="new-password" required value={f.password} onChange={set('password')} placeholder="At least 6 characters" />
+          <PwInput id="su-pw" autoComplete="new-password" required value={f.password} onChange={set('password')} placeholder="At least 6 characters" />
         </div>
         <div className="field">
           <label htmlFor="su-pw2">Password again</label>
-          <input id="su-pw2" type="password" autoComplete="new-password" required value={f.again} onChange={set('again')} />
+          <PwInput id="su-pw2" autoComplete="new-password" required value={f.again} onChange={set('again')} />
         </div>
         <button className="btn" type="submit" disabled={busy}>{busy ? 'Creating...' : 'Create account'}</button>
         <p className="login-alt">Already have an account? <Link href="/login">Log in</Link></p>

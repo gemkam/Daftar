@@ -5181,3 +5181,10 @@ html.mobile-os .tbx-nav a.mob-only { display: flex !important; }
 .tm-cos { display: flex; flex-wrap: wrap; gap: 8px; }
 .tm-co { display: inline-flex; gap: 6px; align-items: center; padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; background: var(--surface); }
 .tm-co.on { border-color: var(--brown); background: var(--tint); }
+/* 👁 password eye (19 Nov 2026) */
+.pw-wrap { position: relative; display: block; width: 100%; }
+.pw-wrap > input { width: 100%; padding-inline-end: 48px !important; }
+.pw-eye { position: absolute; inset-inline-end: 4px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.pw-eye:hover, .pw-eye:focus-visible { color: var(--heading); background: var(--tint); }
+.pw-eye svg { width: 22px; height: 22px; }
