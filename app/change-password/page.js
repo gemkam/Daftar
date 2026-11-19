@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import LangSwitch from '@/components/LangSwitch';
 import { sb } from '@/lib/supabase';
+import PwInput from '@/components/PwInput';
 
 /*
   🔑 Change password without opening the app (19 Nov 2026, Kamran): link on the login page.
@@ -18,7 +19,6 @@ export default function ChangePasswordPage() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
-  const [show, setShow] = useState(false);
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
 
   async function submit(e) {
@@ -41,7 +41,6 @@ export default function ChangePasswordPage() {
     setDone(true);
   }
 
-  const type = show ? 'text' : 'password';
   return (
     <div className="login">
       <LangSwitch className="login-lang" />
@@ -58,14 +57,11 @@ export default function ChangePasswordPage() {
             <div className="field"><label htmlFor="cp-u">Username</label>
               <input id="cp-u" autoComplete="username" autoCapitalize="none" required value={f.username} onChange={set('username')} /></div>
             <div className="field"><label htmlFor="cp-c">Current password</label>
-              <input id="cp-c" type={type} autoComplete="current-password" required value={f.cur} onChange={set('cur')} /></div>
+              <PwInput id="cp-c" autoComplete="current-password" required value={f.cur} onChange={set('cur')} /></div>
             <div className="field"><label htmlFor="cp-1">New password</label>
-              <input id="cp-1" type={type} autoComplete="new-password" required value={f.p1} onChange={set('p1')} placeholder="At least 6 characters" /></div>
+              <PwInput id="cp-1" autoComplete="new-password" required value={f.p1} onChange={set('p1')} placeholder="At least 6 characters" /></div>
             <div className="field"><label htmlFor="cp-2">New password again</label>
-              <input id="cp-2" type={type} autoComplete="new-password" required value={f.p2} onChange={set('p2')} /></div>
-            <label className="muted" style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '0 0 10px' }}>
-              <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} /> Show passwords
-            </label>
+              <PwInput id="cp-2" autoComplete="new-password" required value={f.p2} onChange={set('p2')} /></div>
             <button className="btn" type="submit" disabled={busy}>{busy ? 'Changing...' : 'Change password'}</button>
             <p className="login-alt">Forgot your password? Ask your company owner or the Administrator to set a new one.</p>
           </>

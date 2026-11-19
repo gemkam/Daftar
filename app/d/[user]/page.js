@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { sb } from '@/lib/supabase';
 import { useLang, LangSwitch } from '@/lib/i18n';
+import PwInput from '@/components/PwInput';
 
 /*
   Personal driver link, e.g. https://daftar-office.vercel.app/d/saif (sent by WhatsApp from the Driver trip form).
@@ -117,7 +118,7 @@ export default function DriverLink() {
           <form className="dl-login" onSubmit={login}>
             <div className="dl-user">👤 {u}</div>
             <label htmlFor="dl-pass">{t('Your password')}</label>
-            <input id="dl-pass" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('Password')} dir="ltr" />
+            <PwInput id="dl-pass" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('Password')} dir="ltr" />
             {error && <div className="dl-err">{error}</div>}
             <button type="submit" className="dl-go" disabled={busy}>{busy ? t('Opening trips...') : t('Open my trips ➜')}</button>
             <input type="hidden" autoComplete="username" value={u} readOnly />
