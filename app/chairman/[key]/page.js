@@ -12,7 +12,7 @@ function OneChairman() {
   const { key } = useParams();
   const user = useUser();
   const c = chairmanOf(key);
-  if (!c) return <p className="empty">Chairman not found. <Link href="/chairman">Back to Chairman</Link></p>;
+  if (!c) return <p className="empty">General Manager not found. <Link href="/chairman">Back to General Manager</Link></p>;
   if (!canEnterLead(user, c.username)) return <p className="empty">🔒 This page is only for {c.name}.</p>;
 
   const all = c.companies === 'all';
@@ -21,7 +21,7 @@ function OneChairman() {
   return (
     <>
       <h1>👑 {c.name}</h1>
-      <p className="sub">{c.co ? 'Co-chairman' : 'Chairman'} · {all ? 'Full access · All companies' : cos.length ? 'Full access' : 'No access yet'}</p>
+      <p className="sub">{c.co ? 'Deputy General Manager' : 'General Manager'} · {all ? 'Full access · All companies' : cos.length ? 'Full access' : 'No access yet'}</p>
       {c.approvals && (
         <div className="adm-grid" style={{ marginBottom: 18 }}>
           {all && <Link href="/expenses/summary" className="adm-tile">

@@ -67,7 +67,7 @@ function trail(path, q, names) {
     if (s1 === 'vat') return [HOME, OFFICE, ...(coStep ? [coStep] : []), ['VAT return', path]];
     if (s1 === 'salary') return [HOME, OFFICE, ...(coStep ? [coStep] : []), ['Salary', path]];
     if (s1 === 'petty') return [HOME, OFFICE, ...(coStep ? [coStep] : []), ['Petty cash', path]];
-    if (s1 === 'summary') return coStep ? [HOME, OFFICE, coStep, ['Reports & Summary', path]] : [HOME, LEAD, ['Chairman', '/chairman'], ['Khalid Nasser', '/chairman/khalid'], ['Reports & Summary', path]];
+    if (s1 === 'summary') return coStep ? [HOME, OFFICE, coStep, ['Reports & Summary', path]] : [HOME, LEAD, ['General Manager', '/chairman'], ['Khalid Nasser', '/chairman/khalid'], ['Reports & Summary', path]];
     if (s1 === 'attendance') return [HOME, OFFICE, ...(coStep ? [coStep] : []), ['Attendance', path]];
     if (s1 === 'docs') return [HOME, OFFICE, ...(coStep ? [coStep] : []), [q.get('kind') === 'invoice' ? 'Invoices' : 'Bills', path]];
     return [HOME, OFFICE];
@@ -88,11 +88,11 @@ function trail(path, q, names) {
   }
   if (seg[0] === 'alipack') return [HOME, OFFICE, ['Ali Pack', '/company/ali-pack'], [q.get('tab') || 'Workbooks', path]];
   if (seg[0] === 'system-admin-activity') return [HOME, LEAD, ['System Administrator Activity', path]]; // opened from Faisal's page or Khalid Nasser's page
-  if (seg[0] === 'lead-staff' && seg[1] === 'admins' && seg[2] === 'hamad') return [HOME, LEAD, ['Admins', '/lead-staff/admins'], ['Hamad', path]];
-  if (seg[0] === 'lead-staff') return seg[1] === 'admins' ? [HOME, LEAD, ['Admins', path]] : [HOME, LEAD];
-  if (seg[0] === 'faisal') return [HOME, LEAD, ['Admins', '/lead-staff/admins'], ['Faisal', '/faisal']];
-  if (seg[0] === 'chairman' && seg[2] === 'approvals') return [HOME, LEAD, ['Chairman', '/chairman'], [{ khalid: 'Khalid Nasser', salim: 'Salim' }[seg[1]] || seg[1], `/chairman/${seg[1]}`], ['Approvals', path]];
-  if (seg[0] === 'chairman') return seg[1] ? [HOME, LEAD, ['Chairman', '/chairman'], [{ khalid: 'Khalid Nasser', salim: 'Salim' }[seg[1]] || seg[1], path]] : [HOME, LEAD, ['Chairman', '/chairman']];
+  if (seg[0] === 'lead-staff' && seg[1] === 'admins' && seg[2] === 'hamad') return [HOME, LEAD, ['Secretaries', '/lead-staff/admins'], ['Hamad', path]];
+  if (seg[0] === 'lead-staff') return seg[1] === 'admins' ? [HOME, LEAD, ['Secretaries', path]] : [HOME, LEAD];
+  if (seg[0] === 'faisal') return [HOME, LEAD, ['Secretaries', '/lead-staff/admins'], ['Faisal', '/faisal']];
+  if (seg[0] === 'chairman' && seg[2] === 'approvals') return [HOME, LEAD, ['General Manager', '/chairman'], [{ khalid: 'Khalid Nasser', salim: 'Salim' }[seg[1]] || seg[1], `/chairman/${seg[1]}`], ['Approvals', path]];
+  if (seg[0] === 'chairman') return seg[1] ? [HOME, LEAD, ['General Manager', '/chairman'], [{ khalid: 'Khalid Nasser', salim: 'Salim' }[seg[1]] || seg[1], path]] : [HOME, LEAD, ['General Manager', '/chairman']];
   if (seg[0] === 'admin' && seg[1] === 'companies') return [HOME, ADMIN, ['Company access', path]];
   if (seg[0] === 'admin' && seg[1] === 'staff') return [HOME, ADMIN, ['Staff data entry', path]];
   if (seg[0] === 'admin' && seg[1] === 'create-users') return [HOME, ADMIN, ['Create users', path]];

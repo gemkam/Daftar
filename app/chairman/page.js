@@ -9,12 +9,12 @@ import { canSeeLeadStaff, canEnterLead } from '@/lib/leadStaff';
 function ChairmanPage() {
   const user = useUser();
   const list = canSeeLeadStaff(user) ? CHAIRMEN : [];
-  const sub = (c) => `${c.co ? 'Co-chairman' : 'Chairman'} · ${c.companies === 'all' ? 'Full access · All companies' : hasAccess(c) ? 'Full access' : 'No access yet'}`;
+  const sub = (c) => `${c.co ? 'Deputy General Manager' : 'General Manager'} · ${c.companies === 'all' ? 'Full access · All companies' : hasAccess(c) ? 'Full access' : 'No access yet'}`;
   return (
     <>
-      <h1>👑 Chairman</h1>
-      <p className="sub">Daftar chairmen.</p>
-      {list.length === 0 ? <p className="empty">This page is only for the chairmen and the Administrator.</p> : (
+      <h1>👑 General Manager</h1>
+      <p className="sub">Daftar general managers.</p>
+      {list.length === 0 ? <p className="empty">This page is only for the general managers and the Administrator.</p> : (
         <div className="adm-grid">
           {list.map((c) => (canEnterLead(user, c.username) ? (
             <Link key={c.key} href={`/chairman/${c.key}`} className="adm-tile">

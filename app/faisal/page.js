@@ -24,7 +24,7 @@ const ALL = [
   ['/expenses/vat', '🧾', 'VAT return', 'Output and input VAT of all companies and Transport'],
   ['/transport', '🚚', 'Transport', 'Trip sheets, drivers, vehicles, salary sheets'],
   ['/docs?tab=company', '📋', 'Documents Checklist', 'Papers and expiry dates of every company'],
-  ['/chairman/khalid/approvals', '✅', 'Approvals', 'Bills verified, waiting for the chairman, approved, rejected']
+  ['/chairman/khalid/approvals', '✅', 'Approvals', 'Bills verified, waiting for the general manager, approved, rejected']
 ];
 
 function Tiles({ list }) {

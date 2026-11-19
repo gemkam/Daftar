@@ -99,11 +99,11 @@ export default function BillVerify({ d, list, canVerify, me, flash, onChanged })
       <div className="bv-line">
         <span className="bv-who">{verifierName(d.company)}</span>
         {appr ? (
-          <span className="bv-chip bv-appr" title={`${a.by || ''} · ${when(a.at)}`}>✅ Chairman approved</span>
+          <span className="bv-chip bv-appr" title={`${a.by || ''} · ${when(a.at)}`}>✅ General Manager approved</span>
         ) : a?.status === 'rejected' ? (
-          <span className="bv-chip bv-rej" title={`${a.by || ''} · ${when(a.at)}`}>✗ Chairman rejected{a.note ? ` (${a.note})` : ''}</span>
+          <span className="bv-chip bv-rej" title={`${a.by || ''} · ${when(a.at)}`}>✗ General Manager rejected{a.note ? ` (${a.note})` : ''}</span>
         ) : v?.status === 'verified' ? (
-          <span className="bv-chip bv-waitc" title={`Verified by ${v.by || ''} · ${when(v.at)}${v.note ? ` · ${v.note}` : ''}`}>⏳ Waiting for chairman approval</span>
+          <span className="bv-chip bv-waitc" title={`Verified by ${v.by || ''} · ${when(v.at)}${v.note ? ` · ${v.note}` : ''}`}>⏳ Waiting for general manager approval</span>
         ) : v?.status === 'rejected' ? (
           <span className="bv-chip bv-rej" title={`${v.by} · ${when(v.at)}`}>✗ Rejected{v.reason ? `: ${v.reason}` : ''}{v.note ? ` (${v.note})` : ''}</span>
         ) : canVerify ? (

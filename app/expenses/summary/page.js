@@ -175,7 +175,7 @@ function SummaryPage() {
     return (
       <div className="card" style={{ maxWidth: 560, margin: '30px auto', padding: 22, display: 'grid', gap: 10 }}>
         <h2 style={{ margin: 0 }}>📊 Reports & Summary</h2>
-        <p style={{ margin: 0 }}>The complete summary of all companies is with the Chairman. Open the report of your company from <Link href="/expenses">All Companies</Link> › your company › Reports & Summary.</p>
+        <p style={{ margin: 0 }}>The complete summary of all companies is with the General Manager. Open the report of your company from <Link href="/expenses">All Companies</Link> › your company › Reports & Summary.</p>
       </div>
     );
   }
@@ -252,7 +252,7 @@ function SummaryPage() {
       </div>
 
       <div className="page-tools">
-        <Link href={coLock ? `/company/${coLock}` : '/chairman/khalid'} className="crumb">{coLock ? `← ${COMPANIES.find((c) => c.key === coLock)?.short}` : '← Chairman'}</Link>
+        <Link href={coLock ? `/company/${coLock}` : '/chairman/khalid'} className="crumb">{coLock ? `← ${COMPANIES.find((c) => c.key === coLock)?.short}` : '← General Manager'}</Link>
         <div className="tools">
           <button type="button" className="btn" onClick={() => {
             const el = document.getElementById('pl-statement');

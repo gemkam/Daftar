@@ -9,13 +9,13 @@ function LeadStaffPage() {
   const user = useUser();
   const list = [];
   if (canSeeLeadStaff(user)) {
-    list.push(['/chairman', '👑', 'Chairman', 'Khalid Nasser · Salim']);
-    list.push(['/lead-staff/admins', '🛡', 'Admins', 'Faisal · Hamad']);
+    list.push(['/chairman', '👑', 'General Manager', 'Khalid Nasser · Salim']);
+    list.push(['/lead-staff/admins', '🛡', 'Secretaries', 'Faisal · Hamad']);
   }
   return (
     <>
       <h1>⭐ Lead Staff</h1>
-      <p className="sub">Daftar chairmen and admins.</p>
+      <p className="sub">Daftar general managers and secretaries.</p>
       {list.length === 0 ? <p className="empty">This page is only for the lead staff and the Administrator.</p> : (
         <div className="adm-grid">
           {list.map(([href, ico, label, sub]) => (

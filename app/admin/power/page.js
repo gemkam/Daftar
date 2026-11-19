@@ -54,12 +54,12 @@ function PowerSwitch() {
       <div className="pw-how">
         <h2>How it works</h2>
         <ul>
-          <li><b>Rename:</b> tap a label (for example Chairman or Admins), type the new words, 💾 Save.</li>
+          <li><b>Rename:</b> tap a label (for example General Manager or Secretaries), type the new words, 💾 Save.</li>
           <li><b>Font:</b> in the same box choose a font, size, colour, bold or italic. It changes only that item.</li>
           <li><b>Photo or logo:</b> tap the photo, 📷 Choose new photo, 💾 Save.</li>
           <li><b>Where:</b> Only on this page, or Everywhere in the app.</li>
           <li><b>↩ Back to original</b> in the box, or <b>↶ Undo</b> in the green bar at the bottom.</li>
-          <li><b>Go inside a page</b> (for example Lead Staff › Chairman): tap <b>👆 Open pages</b> in the green bar, open the page, then tap <b>✏️ Change</b> to change things there. Or use ▶ Open it in the box.</li>
+          <li><b>Go inside a page</b> (for example Lead Staff › General Manager): tap <b>👆 Open pages</b> in the green bar, open the page, then tap <b>✏️ Change</b> to change things there. Or use ▶ Open it in the box.</li>
           <li>Saved changes show for every user at once.</li>
           <li>Data (table rows, amounts, forms) is not changed here. Each page has its own ✏️ Edit for data.</li>
         </ul>
