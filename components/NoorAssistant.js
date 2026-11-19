@@ -54,6 +54,13 @@ const TXT = {
 };
 /* Assistant languages (Daftar, 19 Nov 2026): English first, then Omani Arabic, Urdu script, Roman Urdu */
 const LANGS = [['en', 'English'], ['ar', 'العربية'], ['ur', 'اردو'], ['ru', 'Roman Urdu']];
+/* 19 Nov 2026 (Kamran): with English chosen, no Arabic or Urdu letters on the buttons; each language shows the names in its own script */
+const LANG_NAMES = {
+  en: { en: 'English', ar: 'Arabic', ur: 'Urdu', ru: 'Roman Urdu' },
+  ru: { en: 'English', ar: 'Arabic', ur: 'Urdu', ru: 'Roman Urdu' },
+  ar: { en: 'الإنجليزية', ar: 'العربية', ur: 'الأردية', ru: 'أردو لاتيني' },
+  ur: { en: 'انگریزی', ar: 'عربی', ur: 'اردو', ru: 'رومن اردو' }
+};
 const SPEECH_LANG = { en: 'en-US', ar: 'ar-OM', ur: 'ur-PK', ru: 'en-IN' };
 // Voice (speaking) language when no voice is picked: phones know ar-SA, many do not know ar-OM
 const TTS_LANG = { en: 'en-US', ar: 'ar-SA', ur: 'ur-PK', ru: 'en-IN' };
@@ -648,8 +655,8 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
           </header>
 
           <div className="noor-lang" role="group" aria-label="Language">
-            {LANGS.map(([k, label]) => (
-              <button key={k} type="button" className={lang === k ? 'on' : ''} onClick={() => changeLang(k)} aria-pressed={lang === k} lang={k === 'ru' ? 'en' : k}>{label}</button>
+            {LANGS.map(([k]) => (
+              <button key={k} type="button" className={lang === k ? 'on' : ''} onClick={() => changeLang(k)} aria-pressed={lang === k} lang={lang === 'ar' || lang === 'ur' ? lang : 'en'}>{(LANG_NAMES[lang] || LANG_NAMES.en)[k]}</button>
             ))}
           </div>
           <div className="noor-lang noor-who-pick" role="group" aria-label="Assistant">
