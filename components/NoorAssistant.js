@@ -87,6 +87,16 @@ function hasMaleVoice(lang) {
   return all.some((v) => pre.some((w) => L(v).startsWith(w)) && MALE.test(v.name) && !FEMALE.test(v.name));
 }
 
+/* Which language is this text in? So the voice matches the answer even if it is not the switch language */
+function textLang(text, fallback) {
+  const t = String(text || '');
+  const arab = (t.match(/[\u0600-\u06FF]/g) || []).length;
+  const latin = (t.match(/[A-Za-z]/g) || []).length;
+  if (arab > latin) return /[\u06A9\u06AF\u06BA\u06BE\u06C1\u06CC\u06D2\u0679\u0688\u0691\u067E\u0686]/.test(t) ? 'ur' : 'ar';
+  if (fallback === 'ru' || /\b(hai|hain|hoon|aap|kya|kitna|kitne|mein|nahi|kar|raha|rahi|sakta|sakti|kharcha|batayen|bataiye)\b/i.test(t)) return 'ru';
+  return 'en';
+}
+
 function bestVoice(lang, wantMale = true) {
   const all = window.speechSynthesis?.getVoices() || [];
   const L = (v) => (v.lang || '').toLowerCase().replace('_', '-');
@@ -416,12 +426,13 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
     const clean = String(text).replace(/[*_#`]/g, '').replace(/\bOMR\b/g, 'Rials').replace(/(\d),(\d{3})/g, '$1$2').replace(/%/g, ' percent').replace(/\bSamiya\b/g, 'Saa-mee-yah'); // say Samiya as Saa-mee-yah, not Samaya
     const parts = clean.split(/(?<=[.!?\n])\s+/).flatMap((p) => p.match(/.{1,170}(\s|$)/g) || [p]).map((p) => p.trim()).filter(Boolean);
     if (!parts.length) { then?.(); return; }
-    const { voice, male, female } = bestVoice(live.current.lang, live.current.P.male);
+    const tl = textLang(clean, live.current.lang);
+    const { voice, male, female } = bestVoice(tl, live.current.P.male);
     setSpeakingIdx(idx);
     setMode('speaking');
     parts.forEach((part, i) => {
       const u = new SpeechSynthesisUtterance(part);
-      if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = SPEECH_LANG[live.current.lang] || 'en-GB';
+      if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = SPEECH_LANG[tl] || 'en-GB';
       u.rate = 0.96;
       u.pitch = live.current.P.male ? (male ? 1 : 0.8) : (female ? 1 : 1.2); // deeper / higher if the right voice was not found
       if (i === parts.length - 1) {
@@ -639,7 +650,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
               </div>
             )}
             {msgs.map((m, i) => (
-              <div key={i} className={`noor-msg ${m.role === 'user' ? 'me' : 'bot'} ${m.error ? 'err' : ''}`}>
+              <div key={i} dir="auto" className={`noor-msg ${m.role === 'user' ? 'me' : 'bot'} ${m.error ? 'err' : ''}`}>
                 {m.role === 'assistant' && !m.error ? <TypeText text={m.content} fresh={m.fresh} onTick={scrollDown} /> : m.content}
                 {m.role === 'assistant' && !m.error && (
                   <span className="noor-tools">
