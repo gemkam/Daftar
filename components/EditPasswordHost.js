@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Modal from '@/components/Modal';
-import { checkEditPassword } from '@/lib/editLock';
+import { checkEditPassword, NO_PASSWORDS } from '@/lib/editLock';
 
 /* The "Edit password" box (one for the whole app, mounted by AuthGate). Opened by requestEditPassword(). */
 export default function EditPasswordHost() {
@@ -11,7 +11,7 @@ export default function EditPasswordHost() {
   const [err, setErr] = useState('');
   const inputRef = useRef(null);
   useEffect(() => {
-    const on = (e) => { setReq(() => e.detail); setVal(''); setErr(''); };
+    const on = (e) => { if (NO_PASSWORDS) { e.detail?.(true); return; } setReq(() => e.detail); setVal(''); setErr(''); };
     window.addEventListener('tudo-edit-password', on);
     return () => window.removeEventListener('tudo-edit-password', on);
   }, []);

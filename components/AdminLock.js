@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { isRightPassword } from '@/lib/editLock';
+import { isRightPassword, NO_PASSWORDS } from '@/lib/editLock';
 
 /* Admin password (5 Nov 2026, Owner): the Admin area opens only after the password.
    No Enter needed: Admin opens the moment the right password is typed. */
@@ -14,6 +14,8 @@ export default function AdminLock({ onOpen }) {
   const [err, setErr] = useState('');
   const inputRef = useRef(null);
   useEffect(() => { const t = setTimeout(() => inputRef.current?.focus(), 30); return () => clearTimeout(t); }, []);
+  useEffect(() => { if (NO_PASSWORDS) onOpen?.(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (NO_PASSWORDS) return null; // Daftar: no admin password
 
   async function typed(v) {
     setVal(v); setErr('');
