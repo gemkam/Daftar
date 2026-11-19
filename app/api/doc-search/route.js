@@ -58,9 +58,8 @@ ${list.join('\n')}`;
     const nums = Array.isArray(parsed.ids) ? parsed.ids.map(Number).filter((n) => n >= 1 && n <= rows.length) : [];
     return Response.json({ ids: [...new Set(nums)].map((n) => rows[n - 1].id), answer: String(parsed.answer || '').slice(0, 300) });
   } catch (e) {
-    if (e.code === 'NO_KEY') return Response.json({ error: 'AI Search is not switched on. Administrator: add GROQ_API_KEY in Vercel.' }, { status: 503 });
-    const msg = String(e.message || '');
-    const reason = /429|rate limit|quota/i.test(msg) ? 'The free AI limit is used up for now. Wait a minute.' : 'Please try again.';
-    return Response.json({ error: `AI Search could not answer. ${reason}` }, { status: 502 });
+    // Technical reasons go to the Vercel logs only, never to the user
+    console.error('ai search error', e.code || '', String(e.message || '').slice(0, 500));
+    return Response.json({ error: 'AI Search is busy right now. Please try again in a little while.', code: 'busy' }, { status: 503 });
   }
 }

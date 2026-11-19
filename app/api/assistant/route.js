@@ -59,15 +59,8 @@ export async function POST(req) {
     const answer = await askAI(system, messages);
     return Response.json({ answer: answer || 'Sorry, I could not find an answer.' });
   } catch (e) {
-    if (e.code === 'NO_KEY') {
-      return Response.json({ error: 'The assistant is not switched on yet. Administrator: add GROQ_API_KEY in Vercel, then redeploy.' }, { status: 503 });
-    }
-    console.error('assistant error', e);
-    const msg = String(e.message || '');
-    let reason = 'Please try again.';
-    if (/401|invalid api key|invalid_api_key/i.test(msg) && !/429/.test(msg)) reason = 'The GROQ_API_KEY in Vercel is not valid. Create a new key and update it.';
-    else if (/429|rate limit|quota|tokens per/i.test(msg)) reason = 'The free AI daily limit is used up. Administrator: add OPENROUTER_API_KEY in Vercel as a free backup (see handover), or wait for the limit to reset.';
-    else if (/model/i.test(msg)) reason = 'The AI model is not available.';
-    return Response.json({ error: `The assistant could not answer right now. ${reason}`, detail: msg.slice(0, 500) }, { status: 502 });
+    // Technical reasons (missing key, daily limit, bad key) go to the Vercel logs only, never to the user
+    console.error('assistant error', e.code || '', String(e.message || '').slice(0, 500));
+    return Response.json({ error: "I cannot answer right now. Please try again in a little while.", code: 'busy' }, { status: 503 });
   }
 }

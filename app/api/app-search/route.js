@@ -106,9 +106,8 @@ ${String(inv).slice(0, 2500)}`;
       .map((l) => ({ href: l.href, label: String(l.label || pages.find(([, h]) => h === l.href)?.[0] || 'Open').slice(0, 60) }));
     return Response.json({ answer: String(parsed.answer || '').replace(/[*#`]/g, '').slice(0, 800), links });
   } catch (e) {
-    if (e.code === 'NO_KEY') return Response.json({ error: 'AI Search is not switched on. Administrator: add GROQ_API_KEY in Vercel.' }, { status: 503 });
-    const msg = String(e.message || '');
-    const reason = /429|rate limit|quota|tokens per/i.test(msg) ? 'The free AI limit is used up for now. Wait a minute and try again.' : 'Please try again.';
-    return Response.json({ error: `AI Search could not answer. ${reason}` }, { status: 502 });
+    // Technical reasons go to the Vercel logs only, never to the user
+    console.error('ai search error', e.code || '', String(e.message || '').slice(0, 500));
+    return Response.json({ error: 'AI Search is busy right now. Please try again in a little while.', code: 'busy' }, { status: 503 });
   }
 }

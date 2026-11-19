@@ -21,7 +21,8 @@ const TXT = {
     placeholder: 'Ask Faisal anything', listenPh: 'Listening... speak now', silence: 'I will answer after 3 seconds of silence',
     talkOn: 'Talk mode on: just speak, I will reply and listen again', talk: 'Talk', hint: 'Hi, I am Faisal 👋 Drag me anywhere',
     micBlocked: 'The microphone is blocked. Please allow the microphone for this site in the browser settings, then try again.',
-    noMic: 'This browser cannot listen. Please use Google Chrome or Microsoft Edge.'
+    noMic: 'This browser cannot listen. Please use Google Chrome or Microsoft Edge.',
+    busy: 'I cannot answer right now. Please try again in a little while.'
   },
   ru: {
     status: { idle: 'Online', listening: 'Sun raha hoon...', thinking: 'Soch raha hoon...', speaking: 'Bol raha hoon...' },
@@ -29,7 +30,8 @@ const TXT = {
     placeholder: 'Faisal se kuch bhi poochiye', listenPh: 'Sun raha hoon... boliye', silence: '3 second khamoshi ke baad jawab doonga',
     talkOn: 'Talk mode on: bas boliye, main jawab de kar phir sunoonga', talk: 'Baat', hint: 'Assalam o Alaikum, main Faisal hoon 👋 Mujhe kahin bhi le jayein',
     micBlocked: 'Microphone band hai. Browser settings mein is site ke liye microphone allow kariye, phir dobara try kariye.',
-    noMic: 'Yeh browser sun nahi sakta. Google Chrome ya Microsoft Edge use kariye.'
+    noMic: 'Yeh browser sun nahi sakta. Google Chrome ya Microsoft Edge use kariye.',
+    busy: 'Abhi jawab nahi mil raha. Thori der baad dobara try kariye.'
   },
   ar: {
     status: { idle: 'متصل', listening: 'قاعد أسمع...', thinking: 'قاعد أفكر...', speaking: 'قاعد أتكلم...' },
@@ -37,7 +39,8 @@ const TXT = {
     placeholder: 'اسأل فيصل أي شي', listenPh: 'قاعد أسمع... تكلّم الحين', silence: 'بجاوب بعد ٣ ثواني سكوت',
     talkOn: 'وضع الكلام شغّال: بس تكلّم، بجاوب وبعدين أسمع مرة ثانية', talk: 'كلام', hint: 'هلا، أنا فيصل 👋 اسحبني لأي مكان',
     micBlocked: 'المايكروفون مقفول. اسمح للمايكروفون لهالموقع من إعدادات المتصفح، بعدين جرّب مرة ثانية.',
-    noMic: 'هالمتصفح ما يقدر يسمع. استخدم جوجل كروم أو مايكروسوفت إيدج.'
+    noMic: 'هالمتصفح ما يقدر يسمع. استخدم جوجل كروم أو مايكروسوفت إيدج.',
+    busy: 'ما أقدر أجاوب الحين. جرّب مرة ثانية بعد شوي.'
   },
   ur: {
     status: { idle: 'آن لائن', listening: 'سن رہا ہوں...', thinking: 'سوچ رہا ہوں...', speaking: 'بول رہا ہوں...' },
@@ -45,7 +48,8 @@ const TXT = {
     placeholder: 'فیصل سے کچھ بھی پوچھیے', listenPh: 'سن رہا ہوں... بولیے', silence: '3 سیکنڈ خاموشی کے بعد جواب دوں گا',
     talkOn: 'ٹاک موڈ آن: بس بولیے، میں جواب دے کر پھر سنوں گا', talk: 'بات', hint: 'السلام علیکم، میں فیصل ہوں 👋 مجھے کہیں بھی لے جائیں',
     micBlocked: 'مائیکروفون بند ہے۔ براؤزر کی سیٹنگز میں اس سائٹ کے لیے مائیکروفون کی اجازت دیں، پھر دوبارہ کوشش کریں۔',
-    noMic: 'یہ براؤزر سن نہیں سکتا۔ گوگل کروم یا مائیکروسافٹ ایج استعمال کریں۔'
+    noMic: 'یہ براؤزر سن نہیں سکتا۔ گوگل کروم یا مائیکروسافٹ ایج استعمال کریں۔',
+    busy: 'ابھی جواب نہیں مل رہا۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔'
   }
 };
 /* Assistant languages (Daftar, 19 Nov 2026): English first, then Omani Arabic, Urdu script, Roman Urdu */
@@ -555,7 +559,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
         body: JSON.stringify({ scope: 'group', persona: live.current.P.key, lang: live.current.lang, context: live.current.context, page: live.current.page, messages: next.filter((m) => !m.error).slice(-8).map(({ role, content }) => ({ role, content })) })
       });
       const out = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(out.error || 'Faisal could not answer right now. Please try again.');
+      if (!res.ok) { if (res.status === 401) throw new Error(out.error || 'Please log in again.'); console.warn('assistant:', out.error); throw new Error(TXT[live.current.lang]?.busy || TXT.en.busy); }
       const { body, next: follow } = splitNext(out.answer);
       const idx = next.length;
       setMsgs((m) => [...m, { role: 'assistant', content: body, next: follow, fresh: true }]);
@@ -564,7 +568,7 @@ export default function FaisalAssistant({ context, greeting, alertCount = 0, pag
       else { setMode('idle'); after(); }
     } catch (e) {
       setMode('idle');
-      addBot(e.message, true);
+      addBot(/fetch|network|load failed/i.test(e.message) ? (TXT[live.current.lang]?.busy || TXT.en.busy) : e.message, true);
       setTalk(false);
     }
   }
