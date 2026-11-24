@@ -8,7 +8,7 @@ import UiTranslator from '@/components/UiTranslator';
 const FONTS = 'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&display=swap';
 
 export const metadata = {
-  metadataBase: new URL('https://daftar-office.vercel.app'),
+  metadataBase: new URL('https://daftar-gemkam.vercel.app'),
   title: 'Daftar Office System',
   description: 'Office inventory and transport expense for Al Noor Logistics and Trading LLC',
   openGraph: {

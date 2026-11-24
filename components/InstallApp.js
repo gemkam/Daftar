@@ -50,7 +50,7 @@ export default function InstallApp({ isOffice, driverLinks = [] }) {
           <p className="muted" style={{ marginTop: 0 }}>Each link opens only that driver's form. He taps Install, types his password once, and gets his own icon.</p>
           <div className="ia-links">
             {driverLinks.map((d) => {
-              const url = d.user ? `https://daftar-office.vercel.app/d/${d.user}` : '';
+              const url = d.user ? `https://daftar-gemkam.vercel.app/d/${d.user}` : '';
               const text = `Salam ${d.name}\n\nThis is your Daftar trips link\n${url}\n\nOpen it in Chrome\nTap Install ${d.user ? d.user.charAt(0).toUpperCase() + d.user.slice(1) : ''} Trips\nType your password once\n\nThen use the icon on your phone for every trip`;
               return (
                 <div key={d.id} className="ia-link">

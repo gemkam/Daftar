@@ -7,7 +7,7 @@ import { useLang, LangSwitch } from '@/lib/i18n';
 import PwInput from '@/components/PwInput';
 
 /*
-  Personal driver link, e.g. https://daftar-office.vercel.app/d/saif (sent by WhatsApp from the Driver trip form).
+  Personal driver link, e.g. https://daftar-gemkam.vercel.app/d/saif (sent by WhatsApp from the Driver trip form).
   1. Opened inside WhatsApp: tells the driver to open it in Chrome / Safari (apps cannot be added from inside WhatsApp).
   2. One big "📲 Install Saif Trips" button: puts the icon on the phone (Android: one tap + Install; iPhone: 3 steps shown).
      As soon as the phone allows it, a full-screen "Tap here to install" appears; iPhone shows its 3 steps by itself.
