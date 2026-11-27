@@ -10,10 +10,10 @@ const FONTS = 'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..14
 export const metadata = {
   metadataBase: new URL('https://daftar-gemkam.vercel.app'),
   title: 'Daftar Office System',
-  description: 'All-in-one office system: bills and approvals, salaries, inventory, transport and documents, with an AI assistant. Create a free account and try it.',
+  description: 'All-in-one office system for Oman: Fawtara-ready invoices with VAT, quotations, customers (CRM), bills and approvals, expenses and petty cash, bank and cash accounts, profit and loss, employees, attendance and leave, salary slips, inventory, transport and fleet, documents with expiry alerts, multi-company, English and Arabic, with an AI assistant. Create a free account and try it.',
   openGraph: {
     title: 'Daftar Office System',
-    description: 'All-in-one office system: bills and approvals, salaries, inventory, transport and documents, with an AI assistant. Create a free account and try it.',
+    description: 'All-in-one office system for Oman: Fawtara-ready invoices with VAT, quotations, customers (CRM), bills and approvals, expenses and petty cash, bank and cash accounts, profit and loss, employees, attendance and leave, salary slips, inventory, transport and fleet, documents with expiry alerts, multi-company, English and Arabic, with an AI assistant. Create a free account and try it.',
     siteName: 'Daftar Office System',
     type: 'website'
   },

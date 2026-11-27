@@ -10,6 +10,22 @@ import PwInput from '@/components/PwInput';
 // Usernames are mapped to internal login emails, e.g. "Nasser" -> nasser@daftar.local
 const DOMAIN = '@daftar.local';
 
+// What a visitor sees under the login box (27 Nov 2026, Kamran: show every module, not only 6)
+const FEATURES = [
+  ['🧾', 'Invoices and VAT', 'Fawtara-ready e-invoice, QR, Arabic and English, VAT return'],
+  ['📝', 'Quotations', 'Quote, PDF, WhatsApp, convert to invoice'],
+  ['🤝', 'Customers (CRM)', 'Leads, follow-ups, sales pipeline'],
+  ['💵', 'Bills and approvals', 'AI reads bills, verify, chairman approval'],
+  ['📒', 'Expenses and petty cash', 'By department, monthly balance'],
+  ['🏦', 'Accounts', 'Bank and cash, profit and loss, balance sheet'],
+  ['👥', 'Employees', 'Papers, attendance, leave requests'],
+  ['💰', 'Salary', 'Salary sheets and slips sent to staff'],
+  ['📦', 'Inventory', 'Stock in and out, low stock alerts'],
+  ['🚚', 'Transport', 'Trips, drivers, vehicles, maintenance'],
+  ['📋', 'Documents', 'CR, visas and cards with expiry alerts'],
+  ['🤖', 'AI assistant', 'Ask about bills, salary and totals']
+];
+
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState('');
@@ -59,6 +75,13 @@ export default function LoginPage() {
         <p className="login-alt">New to Daftar? <Link href="/signup">Create an account</Link></p>
         <p className="login-alt" style={{ marginTop: 6 }}><Link href="/change-password">🔑 Change password</Link></p>
       </form>
+      <section className="login-feat" aria-label="What is in Daftar">
+        <h2>Everything your office needs, in one app</h2>
+        <ul>
+          {FEATURES.map(([ico, t, d]) => <li key={t}><span aria-hidden="true">{ico}</span><b>{t}</b><small>{d}</small></li>)}
+        </ul>
+        <p className="muted">Several companies in one login · English and Arabic · Works on phone and computer</p>
+      </section>
     </div>
   );
 }

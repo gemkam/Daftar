@@ -71,6 +71,9 @@ export default function ExpenseSideNav({ isAdmin = false, user = null }) {
                 <Btn href={`/personnel?tab=attendance&co=${c.key}`} on={isOn('/expenses/attendance', c.key)} sub>Attendance</Btn>
                 <Btn href={`/expenses/docs?co=${c.key}&kind=receipt`} on={isOn('/expenses/docs', c.key, 'receipt')} sub>Bills</Btn>
                 <Btn href={`/expenses/docs?co=${c.key}&kind=invoice`} on={isOn('/expenses/docs', c.key, 'invoice')} sub>Invoice</Btn>
+                <Btn href={`/expenses/crm?co=${c.key}`} on={isOn('/expenses/crm', c.key)} sub>Customers (CRM)</Btn>
+                <Btn href={`/expenses/quotes?co=${c.key}`} on={isOn('/expenses/quotes', c.key)} sub>Quotations</Btn>
+                <Btn href={`/expenses/leave?co=${c.key}`} on={isOn('/expenses/leave', c.key)} sub>Leave requests</Btn>
               </div>
             )}
           </div>
